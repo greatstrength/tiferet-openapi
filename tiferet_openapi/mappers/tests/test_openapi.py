@@ -220,3 +220,81 @@ def test_api_router_from_model_round_trip() -> None:
     assert result.routes[0].id == 'get_users'
     assert result.routes[0].endpoint == 'users.get_users'
     assert result.routes[0].path == '/users'
+
+
+# ** test: api_route_yaml_object_map_with_swagger_fields
+def test_api_route_yaml_object_map_with_swagger_fields() -> None:
+    '''
+    Test that ApiRouteYamlObject.map() preserves Swagger metadata fields.
+    '''
+
+    # Create a route YAML object with Swagger metadata fields.
+    yaml_data = dict(
+        path='/add',
+        methods=['POST'],
+        status_code=200,
+        summary='Add two numbers',
+        description='Adds two numbers and returns the result',
+        tags=['calculator', 'arithmetic'],
+        request_model='app.domain.request.AddNumberRequest',
+        response_model='app.domain.request.CalculatorResponse',
+    )
+    yaml_obj = ApiRouteYamlObject.model_validate(yaml_data)
+    aggregate = yaml_obj.map(id='add', endpoint='calc.add')
+
+    # Verify Swagger metadata fields are preserved.
+    assert aggregate.summary == 'Add two numbers'
+    assert aggregate.description == 'Adds two numbers and returns the result'
+    assert aggregate.tags == ['calculator', 'arithmetic']
+    assert aggregate.request_model == 'app.domain.request.AddNumberRequest'
+    assert aggregate.response_model == 'app.domain.request.CalculatorResponse'
+
+
+# ** test: api_route_swagger_fields_round_trip
+def test_api_route_swagger_fields_round_trip() -> None:
+    '''
+    Test that from_model round-trips correctly for ApiRoute with Swagger metadata fields.
+    '''
+
+    # Create a route aggregate with Swagger metadata fields.
+    aggregate = ApiRouteAggregate(
+        id='add',
+        endpoint='calc.add',
+        path='/add',
+        methods=['POST'],
+        status_code=200,
+        summary='Add two numbers',
+        description='Adds two numbers and returns the result',
+        tags=['calculator', 'arithmetic'],
+        request_model='app.domain.request.AddNumberRequest',
+        response_model='app.domain.request.CalculatorResponse',
+    )
+
+    # Convert to YAML object and back.
+    yaml_obj = ApiRouteYamlObject.from_model(aggregate)
+    result = yaml_obj.map()
+
+    # Verify round-trip preserves Swagger metadata.
+    assert result.summary == aggregate.summary
+    assert result.description == aggregate.description
+    assert result.tags == aggregate.tags
+    assert result.request_model == aggregate.request_model
+    assert result.response_model == aggregate.response_model
+
+
+# ** test: api_route_yaml_object_map_without_swagger_fields
+def test_api_route_yaml_object_map_without_swagger_fields() -> None:
+    '''
+    Test that ApiRouteYamlObject.map() works without Swagger metadata (backward compat).
+    '''
+
+    # Create a route YAML object without Swagger metadata.
+    yaml_obj = ApiRouteYamlObject.model_validate(ROUTE_YAML_DATA)
+    aggregate = yaml_obj.map(id='get_users', endpoint='users.get_users')
+
+    # Verify defaults for Swagger metadata fields.
+    assert aggregate.summary is None
+    assert aggregate.description is None
+    assert aggregate.tags == []
+    assert aggregate.request_model is None
+    assert aggregate.response_model is None

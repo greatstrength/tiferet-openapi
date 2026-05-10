@@ -4,7 +4,7 @@
 # Export the main domain objects, interfaces, events, mappers, repos, and contexts.
 # Use a try-except block to avoid import errors on build systems.
 try:
-    from .domain import ApiRoute, ApiRouter
+    from .domain import ApiRoute, ApiRouter, ApiRequestModel, ApiResponseModel, ApiErrorResponse
     from .interfaces import OpenApiService
     from .events import GetRouters, GetRoute, GetStatusCode
     from .mappers import (
@@ -23,4 +23,4 @@ except Exception as e:
     pass
 
 # *** version
-__version__ = "0.1.1"
+__version__ = "0.1.2"

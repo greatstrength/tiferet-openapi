@@ -94,7 +94,7 @@ class ApiRouteYamlObject(ApiRoute, TransferObject):
         'to_model': {},
         'to_data.yaml': {
             'by_alias': True,
-            'exclude': {'id', 'endpoint'},
+            'exclude': {'id', 'endpoint', 'tags'},
         },
     }
 

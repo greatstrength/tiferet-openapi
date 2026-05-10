@@ -137,6 +137,56 @@ def test_api_router_prefix_default() -> None:
     assert router.prefix is None
 
 
+# ** test: api_route_swagger_fields
+def test_api_route_swagger_fields() -> None:
+    '''
+    Test that ApiRoute accepts all 5 optional Swagger metadata fields.
+    '''
+
+    # Create a route with all Swagger metadata fields.
+    route = ApiRoute(
+        id='add',
+        endpoint='calc.add',
+        path='/add',
+        methods=['POST'],
+        status_code=200,
+        summary='Add two numbers',
+        description='Adds two numbers and returns the result',
+        tags=['calculator', 'arithmetic'],
+        request_model='app.domain.request.AddNumberRequest',
+        response_model='app.domain.request.CalculatorResponse',
+    )
+
+    # Verify all Swagger metadata fields.
+    assert route.summary == 'Add two numbers'
+    assert route.description == 'Adds two numbers and returns the result'
+    assert route.tags == ['calculator', 'arithmetic']
+    assert route.request_model == 'app.domain.request.AddNumberRequest'
+    assert route.response_model == 'app.domain.request.CalculatorResponse'
+
+
+# ** test: api_route_swagger_fields_defaults
+def test_api_route_swagger_fields_defaults() -> None:
+    '''
+    Test that new Swagger metadata fields default correctly when not provided.
+    '''
+
+    # Create a route without Swagger metadata fields.
+    route = ApiRoute(
+        id='get_users',
+        endpoint='users.get_users',
+        path='/users',
+        methods=['GET'],
+    )
+
+    # Verify defaults.
+    assert route.summary is None
+    assert route.description is None
+    assert route.tags == []
+    assert route.request_model is None
+    assert route.response_model is None
+
+
 # ** test: api_router_routes_default
 def test_api_router_routes_default() -> None:
     '''

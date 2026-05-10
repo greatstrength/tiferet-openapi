@@ -34,6 +34,9 @@ class OpenApiContext(AppInterfaceContext):
     # * attribute: get_status_code_handler
     get_status_code_handler: Callable
 
+    # * attribute: get_routers_handler
+    get_routers_handler: Callable
+
     # * init
     def __init__(self,
             interface_id: str,
@@ -42,6 +45,7 @@ class OpenApiContext(AppInterfaceContext):
             logging: LoggingContext,
             get_route_evt: DomainEvent,
             get_status_code_evt: DomainEvent,
+            get_routers_evt: DomainEvent,
         ):
         '''
         Initialize the OpenAPI context.
@@ -58,6 +62,8 @@ class OpenApiContext(AppInterfaceContext):
         :type get_route_evt: DomainEvent
         :param get_status_code_evt: The domain event for retrieving a status code.
         :type get_status_code_evt: DomainEvent
+        :param get_routers_evt: The domain event for retrieving all routers.
+        :type get_routers_evt: DomainEvent
         '''
 
         # Call the parent constructor.
@@ -66,6 +72,7 @@ class OpenApiContext(AppInterfaceContext):
         # Set the domain event handlers.
         self.get_route_handler = get_route_evt.execute
         self.get_status_code_handler = get_status_code_evt.execute
+        self.get_routers_handler = get_routers_evt.execute
 
     # * method: parse_request
     def parse_request(self, headers: dict = {}, data: dict = {}, feature_id: str = None, **kwargs) -> OpenApiRequestContext:
@@ -138,3 +145,64 @@ class OpenApiContext(AppInterfaceContext):
 
         # Return the result with the specified status code.
         return response, route.status_code if route else 200
+
+    # * method: generate_spec
+    def generate_spec(self, title: str = 'API', version: str = '1.0.0', description: str = '') -> dict:
+        '''
+        Generate an OpenAPI 3.0 specification from the configured routers.
+
+        :param title: The API title.
+        :type title: str
+        :param version: The API version.
+        :type version: str
+        :param description: The API description.
+        :type description: str
+        :return: An OpenAPI 3.0 spec dict.
+        :rtype: dict
+        '''
+
+        # Retrieve all routers via the domain event handler.
+        routers = self.get_routers_handler()
+
+        # Build the paths dict from routers and their routes.
+        paths = {}
+        for router in routers:
+            for route in router.routes:
+                full_path = f'{router.prefix or ""}{route.path}'
+                if full_path not in paths:
+                    paths[full_path] = {}
+                for method in route.methods:
+                    paths[full_path][method.lower()] = {
+                        'operationId': route.endpoint,
+                        'responses': {
+                            str(route.status_code): {
+                                'description': 'Successful response',
+                            },
+                        },
+                    }
+
+        # Return the OpenAPI 3.0 spec.
+        return {
+            'openapi': '3.0.3',
+            'info': {
+                'title': title,
+                'version': version,
+                'description': description,
+            },
+            'paths': paths,
+        }
+
+    # * method: create_docs_handler
+    def create_docs_handler(self, **kwargs):
+        '''
+        Create a documentation handler for serving the OpenAPI spec.
+        Base implementation returns None; override in framework-specific subclasses.
+
+        :param kwargs: Additional keyword arguments.
+        :type kwargs: dict
+        :return: A framework-specific handler, or None.
+        :rtype: Any
+        '''
+
+        # Return None by default (no-op for base context).
+        return None

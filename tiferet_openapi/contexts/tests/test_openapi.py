@@ -15,6 +15,7 @@ from tiferet.contexts import FeatureContext, ErrorContext, LoggingContext
 from tiferet.events import DomainEvent
 
 # ** app
+from ...domain import ApiRoute, ApiRouter
 from ..openapi import OpenApiContext
 from ..request import OpenApiRequestContext
 
@@ -100,6 +101,20 @@ def mock_get_status_code_evt() -> DomainEvent:
     return evt
 
 
+# ** fixture: mock_get_routers_evt
+@pytest.fixture
+def mock_get_routers_evt() -> DomainEvent:
+    '''
+    Mock domain event for get_routers.
+
+    :return: A mock DomainEvent with an execute method.
+    :rtype: DomainEvent
+    '''
+    evt = mock.Mock(spec=DomainEvent)
+    evt.execute = mock.Mock()
+    return evt
+
+
 # ** fixture: context
 @pytest.fixture
 def context(
@@ -108,6 +123,7 @@ def context(
         mock_logging: LoggingContext,
         mock_get_route_evt: DomainEvent,
         mock_get_status_code_evt: DomainEvent,
+        mock_get_routers_evt: DomainEvent,
     ) -> OpenApiContext:
     '''
     Create an OpenApiContext for testing.
@@ -122,6 +138,8 @@ def context(
     :type mock_get_route_evt: DomainEvent
     :param mock_get_status_code_evt: The mock get_status_code domain event.
     :type mock_get_status_code_evt: DomainEvent
+    :param mock_get_routers_evt: The mock get_routers domain event.
+    :type mock_get_routers_evt: DomainEvent
     :return: The OpenApiContext instance.
     :rtype: OpenApiContext
     '''
@@ -133,6 +151,7 @@ def context(
         logging=mock_logging,
         get_route_evt=mock_get_route_evt,
         get_status_code_evt=mock_get_status_code_evt,
+        get_routers_evt=mock_get_routers_evt,
     )
 
 
@@ -375,3 +394,160 @@ def test_handle_response_serializes_result() -> None:
 
     # Assert the response is a serialized dict.
     assert response == {'name': 'test', 'value': 99}
+
+
+# ** test: generate_spec_single_router
+def test_generate_spec_single_router(
+        context: OpenApiContext,
+        mock_get_routers_evt: DomainEvent,
+    ) -> None:
+    '''
+    Test that generate_spec produces a valid OpenAPI 3.0 spec for a single router.
+
+    :param context: The OpenApiContext instance.
+    :type context: OpenApiContext
+    :param mock_get_routers_evt: The mock get_routers domain event.
+    :type mock_get_routers_evt: DomainEvent
+    '''
+
+    # Configure mock routers.
+    mock_get_routers_evt.execute.return_value = [
+        ApiRouter(
+            name='calc',
+            prefix='/calc',
+            routes=[
+                ApiRoute(id='add', endpoint='calc.add', path='/add', methods=['POST'], status_code=200),
+                ApiRoute(id='subtract', endpoint='calc.subtract', path='/subtract', methods=['POST'], status_code=200),
+            ],
+        ),
+    ]
+
+    # Generate the spec.
+    spec = context.generate_spec(title='Calculator API', version='1.0.0', description='A calculator.')
+
+    # Assert the spec structure.
+    assert spec['openapi'] == '3.0.3'
+    assert spec['info']['title'] == 'Calculator API'
+    assert spec['info']['version'] == '1.0.0'
+    assert spec['info']['description'] == 'A calculator.'
+    assert '/calc/add' in spec['paths']
+    assert '/calc/subtract' in spec['paths']
+    assert spec['paths']['/calc/add']['post']['operationId'] == 'calc.add'
+    assert spec['paths']['/calc/subtract']['post']['operationId'] == 'calc.subtract'
+    assert '200' in spec['paths']['/calc/add']['post']['responses']
+
+
+# ** test: generate_spec_multi_router
+def test_generate_spec_multi_router(
+        context: OpenApiContext,
+        mock_get_routers_evt: DomainEvent,
+    ) -> None:
+    '''
+    Test that generate_spec handles multiple routers.
+
+    :param context: The OpenApiContext instance.
+    :type context: OpenApiContext
+    :param mock_get_routers_evt: The mock get_routers domain event.
+    :type mock_get_routers_evt: DomainEvent
+    '''
+
+    # Configure mock routers.
+    mock_get_routers_evt.execute.return_value = [
+        ApiRouter(
+            name='calc',
+            prefix='/calc',
+            routes=[
+                ApiRoute(id='add', endpoint='calc.add', path='/add', methods=['POST'], status_code=200),
+            ],
+        ),
+        ApiRouter(
+            name='health',
+            prefix='',
+            routes=[
+                ApiRoute(id='ping', endpoint='health.ping', path='/ping', methods=['GET'], status_code=200),
+            ],
+        ),
+    ]
+
+    # Generate the spec.
+    spec = context.generate_spec()
+
+    # Assert paths from both routers.
+    assert '/calc/add' in spec['paths']
+    assert '/ping' in spec['paths']
+    assert spec['paths']['/ping']['get']['operationId'] == 'health.ping'
+
+
+# ** test: generate_spec_defaults
+def test_generate_spec_defaults(
+        context: OpenApiContext,
+        mock_get_routers_evt: DomainEvent,
+    ) -> None:
+    '''
+    Test that generate_spec uses default parameter values.
+
+    :param context: The OpenApiContext instance.
+    :type context: OpenApiContext
+    :param mock_get_routers_evt: The mock get_routers domain event.
+    :type mock_get_routers_evt: DomainEvent
+    '''
+
+    # Configure mock with empty routers.
+    mock_get_routers_evt.execute.return_value = []
+
+    # Generate the spec with defaults.
+    spec = context.generate_spec()
+
+    # Assert default values.
+    assert spec['info']['title'] == 'API'
+    assert spec['info']['version'] == '1.0.0'
+    assert spec['info']['description'] == ''
+    assert spec['paths'] == {}
+
+
+# ** test: generate_spec_multiple_methods
+def test_generate_spec_multiple_methods(
+        context: OpenApiContext,
+        mock_get_routers_evt: DomainEvent,
+    ) -> None:
+    '''
+    Test that generate_spec maps each HTTP method to a separate operation entry.
+
+    :param context: The OpenApiContext instance.
+    :type context: OpenApiContext
+    :param mock_get_routers_evt: The mock get_routers domain event.
+    :type mock_get_routers_evt: DomainEvent
+    '''
+
+    # Configure mock with a route that has multiple methods.
+    mock_get_routers_evt.execute.return_value = [
+        ApiRouter(
+            name='items',
+            prefix='/api',
+            routes=[
+                ApiRoute(id='item', endpoint='items.item', path='/item', methods=['GET', 'POST'], status_code=200),
+            ],
+        ),
+    ]
+
+    # Generate the spec.
+    spec = context.generate_spec()
+
+    # Assert both methods are present.
+    assert 'get' in spec['paths']['/api/item']
+    assert 'post' in spec['paths']['/api/item']
+    assert spec['paths']['/api/item']['get']['operationId'] == 'items.item'
+    assert spec['paths']['/api/item']['post']['operationId'] == 'items.item'
+
+
+# ** test: create_docs_handler_returns_none
+def test_create_docs_handler_returns_none(context: OpenApiContext) -> None:
+    '''
+    Test that create_docs_handler returns None by default.
+
+    :param context: The OpenApiContext instance.
+    :type context: OpenApiContext
+    '''
+
+    # Assert the base create_docs_handler returns None.
+    assert context.create_docs_handler() is None

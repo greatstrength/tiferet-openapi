@@ -50,6 +50,36 @@ class ApiRoute(DomainObject):
         description='The default HTTP status code.',
     )
 
+    # * attribute: summary
+    summary: str | None = Field(
+        default=None,
+        description='Route summary for OpenAPI documentation.',
+    )
+
+    # * attribute: description
+    description: str | None = Field(
+        default=None,
+        description='Route description for OpenAPI documentation.',
+    )
+
+    # * attribute: tags
+    tags: List[str] = Field(
+        default_factory=list,
+        description='Tags for OpenAPI documentation grouping.',
+    )
+
+    # * attribute: request_model
+    request_model: str | None = Field(
+        default=None,
+        description='Dotted import path to the request Pydantic model class.',
+    )
+
+    # * attribute: response_model
+    response_model: str | None = Field(
+        default=None,
+        description='Dotted import path to the response Pydantic model class.',
+    )
+
 
 # ** model: api_router
 class ApiRouter(DomainObject):

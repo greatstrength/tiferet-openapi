@@ -1,4 +1,4 @@
-# AGENTS.md — Tiferet OpenAPI (v0.1.0)
+# AGENTS.md — Tiferet OpenAPI (v0.1.3)
 
 ## Project Overview
 
@@ -7,8 +7,8 @@
 - **Repository:** https://github.com/greatstrength/tiferet-openapi
 - **Branch:** `main`
 - **Python:** ≥ 3.10
-- **Version:** `0.1.0`
-- **Dependencies:** `tiferet >= 2.0.0b1`
+- **Version:** `0.1.3`
+- **Dependencies:** `tiferet >= 2.0.0b3`
 
 ## Architecture
 

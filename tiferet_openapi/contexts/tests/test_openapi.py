@@ -540,6 +540,184 @@ def test_generate_spec_multiple_methods(
     assert spec['paths']['/api/item']['post']['operationId'] == 'items.item'
 
 
+# ** test: generate_spec_with_doc_fields
+def test_generate_spec_with_doc_fields(
+        context: OpenApiContext,
+        mock_get_routers_evt: DomainEvent,
+    ) -> None:
+    '''
+    Test that generate_spec includes summary, description, and tags from routes.
+
+    :param context: The OpenApiContext instance.
+    :type context: OpenApiContext
+    :param mock_get_routers_evt: The mock get_routers domain event.
+    :type mock_get_routers_evt: DomainEvent
+    '''
+
+    # Configure mock routers with doc fields.
+    mock_get_routers_evt.execute.return_value = [
+        ApiRouter(
+            name='calc',
+            prefix='/calc',
+            routes=[
+                ApiRoute(
+                    id='add',
+                    endpoint='calc.add',
+                    path='/add',
+                    methods=['POST'],
+                    status_code=200,
+                    summary='Add two numbers',
+                    description='Adds two numbers and returns the result.',
+                    tags=['Calculator', 'Arithmetic'],
+                ),
+            ],
+        ),
+    ]
+
+    # Generate the spec.
+    spec = context.generate_spec()
+
+    # Assert the doc fields are present in the operation.
+    operation = spec['paths']['/calc/add']['post']
+    assert operation['summary'] == 'Add two numbers'
+    assert operation['description'] == 'Adds two numbers and returns the result.'
+    assert operation['tags'] == ['Calculator', 'Arithmetic']
+
+
+# ** test: generate_spec_without_doc_fields
+def test_generate_spec_without_doc_fields(
+        context: OpenApiContext,
+        mock_get_routers_evt: DomainEvent,
+    ) -> None:
+    '''
+    Test that generate_spec omits summary, description, and tags when not set.
+
+    :param context: The OpenApiContext instance.
+    :type context: OpenApiContext
+    :param mock_get_routers_evt: The mock get_routers domain event.
+    :type mock_get_routers_evt: DomainEvent
+    '''
+
+    # Configure mock routers without doc fields.
+    mock_get_routers_evt.execute.return_value = [
+        ApiRouter(
+            name='calc',
+            prefix='/calc',
+            routes=[
+                ApiRoute(id='add', endpoint='calc.add', path='/add', methods=['POST'], status_code=200),
+            ],
+        ),
+    ]
+
+    # Generate the spec.
+    spec = context.generate_spec()
+
+    # Assert the doc fields are absent from the operation.
+    operation = spec['paths']['/calc/add']['post']
+    assert 'summary' not in operation
+    assert 'description' not in operation
+    assert 'tags' not in operation
+
+
+# ** test: generate_spec_with_request_response_models
+def test_generate_spec_with_request_response_models(
+        context: OpenApiContext,
+        mock_get_routers_evt: DomainEvent,
+    ) -> None:
+    '''
+    Test that generate_spec resolves request and response model schemas.
+
+    :param context: The OpenApiContext instance.
+    :type context: OpenApiContext
+    :param mock_get_routers_evt: The mock get_routers domain event.
+    :type mock_get_routers_evt: DomainEvent
+    '''
+
+    # Use the SampleModel defined in this test module as the model path.
+    model_path = f'{SampleModel.__module__}.{SampleModel.__qualname__}'
+
+    # Configure mock routers with request and response model paths.
+    mock_get_routers_evt.execute.return_value = [
+        ApiRouter(
+            name='calc',
+            prefix='/calc',
+            routes=[
+                ApiRoute(
+                    id='add',
+                    endpoint='calc.add',
+                    path='/add',
+                    methods=['POST'],
+                    status_code=200,
+                    request_model=model_path,
+                    response_model=model_path,
+                ),
+            ],
+        ),
+    ]
+
+    # Generate the spec.
+    spec = context.generate_spec()
+
+    # Assert requestBody schema is present.
+    operation = spec['paths']['/calc/add']['post']
+    assert 'requestBody' in operation
+    assert operation['requestBody']['required'] is True
+    request_schema = operation['requestBody']['content']['application/json']['schema']
+    assert 'properties' in request_schema
+    assert 'name' in request_schema['properties']
+    assert 'value' in request_schema['properties']
+
+    # Assert response schema is present.
+    response_content = operation['responses']['200'].get('content')
+    assert response_content is not None
+    response_schema = response_content['application/json']['schema']
+    assert 'properties' in response_schema
+    assert 'name' in response_schema['properties']
+    assert 'value' in response_schema['properties']
+
+
+# ** test: generate_spec_unresolvable_model_graceful
+def test_generate_spec_unresolvable_model_graceful(
+        context: OpenApiContext,
+        mock_get_routers_evt: DomainEvent,
+    ) -> None:
+    '''
+    Test that generate_spec gracefully handles unresolvable model paths.
+
+    :param context: The OpenApiContext instance.
+    :type context: OpenApiContext
+    :param mock_get_routers_evt: The mock get_routers domain event.
+    :type mock_get_routers_evt: DomainEvent
+    '''
+
+    # Configure mock routers with bad model paths.
+    mock_get_routers_evt.execute.return_value = [
+        ApiRouter(
+            name='calc',
+            prefix='/calc',
+            routes=[
+                ApiRoute(
+                    id='add',
+                    endpoint='calc.add',
+                    path='/add',
+                    methods=['POST'],
+                    status_code=200,
+                    request_model='nonexistent.module.FakeModel',
+                    response_model='nonexistent.module.FakeModel',
+                ),
+            ],
+        ),
+    ]
+
+    # Generate the spec — should not raise.
+    spec = context.generate_spec()
+
+    # Assert requestBody and response content are absent (graceful fallback).
+    operation = spec['paths']['/calc/add']['post']
+    assert 'requestBody' not in operation
+    assert 'content' not in operation['responses']['200']
+
+
 # ** test: create_docs_handler_returns_none
 def test_create_docs_handler_returns_none(context: OpenApiContext) -> None:
     '''

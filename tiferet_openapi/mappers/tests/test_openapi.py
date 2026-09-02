@@ -298,3 +298,36 @@ def test_api_route_yaml_object_map_without_swagger_fields() -> None:
     assert aggregate.tags == []
     assert aggregate.request_model is None
     assert aggregate.response_model is None
+
+# ** test: api_route_yaml_object_to_data_yaml_excludes_only_id_and_endpoint
+def test_api_route_yaml_object_to_data_yaml_excludes_only_id_and_endpoint() -> None:
+    '''
+    Test that the to_data.yaml role only excludes id and endpoint (not tags).
+    '''
+
+    # Verify the exclude set matches the RFP-003 acceptance criterion exactly.
+    assert ApiRouteYamlObject._ROLES['to_data.yaml']['exclude'] == {'id', 'endpoint'}
+
+# ** test: api_route_tags_round_trip_to_data_yaml
+def test_api_route_tags_round_trip_to_data_yaml() -> None:
+    '''
+    Test that a route's non-empty tags survive to_primitive(role='to_data.yaml').
+    '''
+
+    # Create a route aggregate with a non-empty tags list.
+    aggregate = ApiRouteAggregate(
+        id='add',
+        endpoint='calc.add',
+        path='/add',
+        methods=['POST'],
+        status_code=200,
+        tags=['calculator', 'arithmetic'],
+    )
+
+    # Serialize via the to_data.yaml role.
+    yaml_obj = ApiRouteYamlObject.from_model(aggregate)
+    data = yaml_obj.to_primitive(role='to_data.yaml')
+
+    # Verify tags are present with their original value.
+    assert 'tags' in data
+    assert data['tags'] == ['calculator', 'arithmetic']

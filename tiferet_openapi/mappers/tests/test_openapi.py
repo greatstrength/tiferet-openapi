@@ -299,7 +299,6 @@ def test_api_route_yaml_object_map_without_swagger_fields() -> None:
     assert aggregate.request_model is None
     assert aggregate.response_model is None
 
-
 # ** test: api_route_yaml_object_to_data_yaml_excludes_only_id_and_endpoint
 def test_api_route_yaml_object_to_data_yaml_excludes_only_id_and_endpoint() -> None:
     '''
@@ -308,7 +307,6 @@ def test_api_route_yaml_object_to_data_yaml_excludes_only_id_and_endpoint() -> N
 
     # Verify the exclude set matches the RFP-003 acceptance criterion exactly.
     assert ApiRouteYamlObject._ROLES['to_data.yaml']['exclude'] == {'id', 'endpoint'}
-
 
 # ** test: api_route_tags_round_trip_to_data_yaml
 def test_api_route_tags_round_trip_to_data_yaml() -> None:

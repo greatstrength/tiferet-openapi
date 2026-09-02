@@ -48,9 +48,11 @@ release-tracking fields required for trunk TRD planning.
 
 ## Notes on this line's tag history
 
-`v1.0.0b1` is already tagged on `v1.x-proto` (PR #22), but it shipped without
-an RFP behind it and predates this binding. Per `rfp.md`'s own algorithm
-(`git tag --list 'v1.0.0a*'` is empty; `v1.0.0b1` is taken), the next unused
-beta shape on this major.minor is `v1.0.0b2`. The first RFP cluster drafted
-under this binding should treat `v1.0.0b1` as an irregular precedent to cite,
-not a beta round to reuse.
+`v1.x-proto` (PR #22) originally tagged this work `v1.0.0b1`, but it shipped
+without an RFP behind it and predates this binding, and the tag shape itself
+was wrong: it is landed code, so it belongs on the `vX.Y.0aN` alpha line, not
+the `vX.Y.0bN` beta-milestone line. The maintainer is correcting this by
+retagging it `v1.0.0a1` and removing the affected published package version.
+With that correction, `v1.0.0b1` is free and is this line's first proper beta
+milestone — the drafting round containing `TOA1-RFP-001` through
+`TOA1-RFP-005`.

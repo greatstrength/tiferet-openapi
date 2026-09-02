@@ -8,7 +8,7 @@
 - **Branch:** `main`
 - **Python:** ≥ 3.10
 - **Version:** `0.1.3`
-- **Dependencies:** `tiferet >= 2.0.0b3`
+- **Dependencies:** `tiferet >= 2.0.3`
 
 ## Architecture
 
@@ -22,7 +22,8 @@ tiferet_openapi/
 ├── events/              — GetRouters, GetRoute, GetStatusCode (DomainEvent)
 ├── mappers/             — Aggregates and TransferObjects for YAML round-trip
 ├── repos/               — OpenApiYamlRepository (YamlLoader-backed OpenApiService)
-└── contexts/            — OpenApiContext (AppInterfaceContext), OpenApiRequestContext
+├── contexts/            — OpenApiSessionContext (AppSessionContext), OpenApiRequestContext
+└── blueprints/          — build_openapi_session_context, create_openapi_request_context
 ```
 
 ### Key Concepts
@@ -32,15 +33,16 @@ tiferet_openapi/
 - **Domain Events** (`events/openapi.py`): `GetRouters`, `GetRoute`, `GetStatusCode` — receive `OpenApiService` via constructor injection. `GetRoute` parses dotted endpoint strings (e.g., `calc.add`). `GetStatusCode` uses `@DomainEvent.parameters_required`.
 - **Mappers** (`mappers/openapi.py`): `ApiRouteAggregate`, `ApiRouterAggregate` (mutable, direct Pydantic constructors), `ApiRouteYamlObject`, `ApiRouterYamlObject` (serialization via `_ROLES` ClassVar, `model_validate`, `@classmethod from_model`). `ApiRouterYamlObject.routes` is a `Dict[str, ApiRouteYamlObject]` keyed by route ID; `map()` converts to a list with endpoint derivation.
 - **Repository** (`repos/openapi.py`): `OpenApiYamlRepository` — `YamlLoader`-backed implementation of `OpenApiService`. Constructor params: `openapi_yaml_file`, `root_key` (default `'openapi'`), `encoding`. The `root_key` enables compatibility with `flask.yml`, `fast.yml`, and unified `openapi.yml` formats.
-- **Contexts** (`contexts/openapi.py`, `contexts/request.py`): `OpenApiContext` — receives `DomainEvent` instances (`get_route_evt`, `get_status_code_evt`), wraps `.execute` internally. `handle_error` raises `TiferetAPIError` with `status_code`. `handle_response` returns `(response, status_code)` tuple. `OpenApiRequestContext` serializes Pydantic `BaseModel` results via `model_dump()`.
+- **Contexts** (`contexts/openapi.py`, `contexts/request.py`): `OpenApiSessionContext(AppSessionContext)` — receives `DomainEvent` instances (`get_route_evt`, `get_status_code_evt`, `get_routers_evt`) as private attrs. `handle_error` resolves a status code then raises `TiferetAPIError` with `status_code`. `build_response` returns `(response, status_code)` tuple. `OpenApiRequestContext` serializes Pydantic `BaseModel` results via `model_dump()`.
+- **Blueprints** (`blueprints/openapi.py`): `build_openapi_session_context` — composition helper, parallel to the framework's `build_cli_session_context`, wiring a fully constructed `OpenApiSessionContext`. `create_openapi_request_context` — optional request-handler factory constructing an `OpenApiRequestContext` for BaseModel-serialization behavior.
 
 ### Runtime Flow (within a framework adapter)
 
-1. Framework adapter (e.g., `FlaskAppBuilder`) loads settings and service provider.
-2. `OpenApiContext` is instantiated with `DomainEvent` instances for route and status code lookup.
-3. On request, `context.run()` parses the request, executes the feature, and returns a response with status code.
-4. `handle_error` resolves HTTP status via `get_status_code_handler`, raises `TiferetAPIError` with `status_code`.
-5. `handle_response` retrieves the route via `get_route_handler` and returns `(response, route.status_code)`.
+1. Framework adapter (e.g., `FlaskAppBuilder`) loads settings and calls `build_openapi_session_context` with the resolved app session, cache, and OpenAPI event collaborators.
+2. `OpenApiSessionContext` is constructed with `DomainEvent` instances for route, status code, and router lookup.
+3. On request, `context.run()` builds the request, executes the feature, and returns a response with status code.
+4. `handle_error` resolves HTTP status via `_get_status_code_evt`, then delegates to the hub's `handle_error`, raising `TiferetAPIError` with `status_code`.
+5. `build_response` delegates to the hub's `build_response`, then retrieves the route via `_get_route_evt` and returns `(response, route.status_code)`.
 
 ## Structured Code Style
 
@@ -75,8 +77,9 @@ See the [tiferet AGENTS.md](https://github.com/greatstrength/tiferet) for the fu
 - `tiferet_openapi/events/openapi.py` — `GetRouters`, `GetRoute`, `GetStatusCode` domain events
 - `tiferet_openapi/mappers/openapi.py` — Aggregates and TransferObjects
 - `tiferet_openapi/repos/openapi.py` — `OpenApiYamlRepository`
-- `tiferet_openapi/contexts/openapi.py` — `OpenApiContext`
+- `tiferet_openapi/contexts/openapi.py` — `OpenApiSessionContext`
 - `tiferet_openapi/contexts/request.py` — `OpenApiRequestContext`
+- `tiferet_openapi/blueprints/openapi.py` — `build_openapi_session_context`, `create_openapi_request_context`
 
 ## YAML Configuration Format
 
@@ -111,6 +114,8 @@ from tiferet_openapi import (
     # Repository
     OpenApiYamlRepository,
     # Contexts
-    OpenApiContext, OpenApiRequestContext,
+    OpenApiSessionContext, OpenApiRequestContext,
+    # Blueprints
+    build_openapi_session_context, create_openapi_request_context,
 )
 ```

@@ -36,7 +36,8 @@ tiferet_openapi/
 ├── events/              — GetRouters, GetRoute, GetStatusCode (DomainEvent)
 ├── mappers/             — Aggregates and TransferObjects for YAML round-trip
 ├── repos/               — OpenApiYamlRepository (YamlLoader-backed OpenApiService)
-└── contexts/            — OpenApiContext (AppInterfaceContext), OpenApiRequestContext
+├── contexts/            — OpenApiSessionContext (AppSessionContext), OpenApiRequestContext
+└── blueprints/          — build_openapi_session_context, create_openapi_request_context
 ```
 
 ### Domain Objects
@@ -79,8 +80,13 @@ Aggregates and TransferObjects bridge YAML configuration and runtime domain obje
 
 ### Contexts
 
-- **`OpenApiContext(AppInterfaceContext)`** — Shared API context that receives `DomainEvent` instances for route and status code lookup. Provides `parse_request`, `handle_error` (with HTTP status code resolution), and `handle_response` (returning `(response, status_code)` tuples).
+- **`OpenApiSessionContext(AppSessionContext)`** — Shared API session context that extends the Tiferet application session hub with `DomainEvent` instances for route and status code lookup. Overrides `build_response` (attaching an HTTP status code via the route lookup) and `handle_error` (attaching a resolved status code to a raised `TiferetAPIError`). Also carries `generate_spec` and `create_docs_handler`.
 - **`OpenApiRequestContext(RequestContext)`** — Pydantic-aware request context that serializes `BaseModel` results via `model_dump()`, with support for lists, dicts, `None`, and primitives.
+
+### Blueprints
+
+- **`build_openapi_session_context(app_session, cache, get_route_evt, get_status_code_evt, get_routers_evt, create_request_handler=None, **extra_kwargs)`** — Composition helper, parallel to the framework's `build_cli_session_context`, that wires a fully constructed `OpenApiSessionContext`. Defaults `create_request_handler` to the framework's plain `create_request_context`.
+- **`create_openapi_request_context(interface_id, feature_id, headers=None, data=None)`** — Request-handler factory that constructs an `OpenApiRequestContext` instead of a base `RequestContext`, opting into Pydantic `BaseModel` serialization. Pass this as `create_request_handler` to `build_openapi_session_context` when that behavior is wanted.
 
 ## YAML Configuration Format
 
@@ -121,14 +127,14 @@ Tiferet OpenAPI is consumed by framework-specific adapters. Here's how the share
 
 ### In tiferet-flask / tiferet-fast
 
-Framework adapters extend `OpenApiContext` and use `OpenApiYamlRepository` as their configuration backend:
+Framework adapters extend `OpenApiSessionContext` and use `OpenApiYamlRepository` as their configuration backend:
 
 ```python
 # Framework adapter context (e.g., FlaskApiContext)
-from tiferet_openapi import OpenApiContext, OpenApiRequestContext
+from tiferet_openapi import OpenApiSessionContext, OpenApiRequestContext
 
-class FlaskApiContext(OpenApiContext):
-    # Inherits parse_request, handle_error, handle_response
+class FlaskApiContext(OpenApiSessionContext):
+    # Inherits build_request, handle_error, build_response
     # Adds Flask-specific builder logic
     pass
 ```

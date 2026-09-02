@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Tiferet collaboration process — working RFP/TRD drafts (public copy is the
+# GitHub issue body; see docs/collab/rfp.md)
+.rfp/
+.trd/

@@ -3,5 +3,5 @@
 # *** exports
 
 # ** app
-from .openapi import OpenApiContext
+from .openapi import OpenApiSessionContext
 from .request import OpenApiRequestContext

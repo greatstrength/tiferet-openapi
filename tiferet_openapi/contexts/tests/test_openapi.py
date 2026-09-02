@@ -8,6 +8,7 @@ from unittest import mock
 
 # ** infra
 import pytest
+from pydantic import BaseModel
 from tiferet import TiferetError, TiferetAPIError
 from tiferet.contexts.app import AppSessionContext
 from tiferet.domain import AppSession
@@ -17,6 +18,27 @@ from tiferet.events import DomainEvent
 from ...domain import ApiRoute, ApiRouter
 from ..openapi import OpenApiSessionContext
 from ..request import OpenApiRequestContext
+
+# *** models
+
+# ** model: spec_request_model
+class SpecRequestModel(BaseModel):
+    '''
+    Request payload model used to verify generated request schemas.
+    '''
+
+    # * attribute: amount
+    amount: int
+
+
+# ** model: spec_response_model
+class SpecResponseModel(BaseModel):
+    '''
+    Response payload model used to verify generated response schemas.
+    '''
+
+    # * attribute: result
+    result: int
 
 
 # *** fixtures
@@ -345,6 +367,157 @@ def test_generate_spec_single_router(
     assert spec['paths']['/calc/add']['post']['operationId'] == 'calc.add'
     assert spec['paths']['/calc/subtract']['post']['operationId'] == 'calc.subtract'
     assert '200' in spec['paths']['/calc/add']['post']['responses']
+
+# ** test: generate_spec_includes_documentation_fields_and_schemas
+def test_generate_spec_includes_documentation_fields_and_schemas(
+        context: OpenApiSessionContext,
+        mock_get_routers_evt: DomainEvent,
+    ) -> None:
+    '''
+    Test that generate_spec includes all declared route documentation fields.
+
+    :param context: The OpenApiSessionContext instance.
+    :type context: OpenApiSessionContext
+    :param mock_get_routers_evt: The mock get_routers domain event.
+    :type mock_get_routers_evt: DomainEvent
+    '''
+
+    # Configure a route with every documentation field declared.
+    mock_get_routers_evt.execute.return_value = [
+        ApiRouter(
+            name='calc',
+            prefix='/calc',
+            routes=[
+                ApiRoute(
+                    id='add',
+                    endpoint='calc.add',
+                    path='/add',
+                    methods=['POST'],
+                    status_code=201,
+                    summary='Add numbers',
+                    description='Adds two supplied numbers.',
+                    tags=['calculation'],
+                    request_model=f'{__name__}.SpecRequestModel',
+                    response_model=f'{__name__}.SpecResponseModel',
+                ),
+            ],
+        ),
+    ]
+
+    # Generate the specification.
+    spec = context.generate_spec()
+
+    # Assert the complete documented operation shape.
+    assert spec['paths']['/calc/add']['post'] == {
+        'operationId': 'calc.add',
+        'responses': {
+            '201': {
+                'description': 'Successful response',
+                'content': {
+                    'application/json': {
+                        'schema': SpecResponseModel.model_json_schema(),
+                    },
+                },
+            },
+        },
+        'summary': 'Add numbers',
+        'description': 'Adds two supplied numbers.',
+        'tags': ['calculation'],
+        'requestBody': {
+            'required': True,
+            'content': {
+                'application/json': {
+                    'schema': SpecRequestModel.model_json_schema(),
+                },
+            },
+        },
+    }
+
+
+# ** test: generate_spec_preserves_bare_operation_without_documentation_fields
+def test_generate_spec_preserves_bare_operation_without_documentation_fields(
+        context: OpenApiSessionContext,
+        mock_get_routers_evt: DomainEvent,
+    ) -> None:
+    '''
+    Test that generate_spec preserves the bare operation shape when undeclared.
+
+    :param context: The OpenApiSessionContext instance.
+    :type context: OpenApiSessionContext
+    :param mock_get_routers_evt: The mock get_routers domain event.
+    :type mock_get_routers_evt: DomainEvent
+    '''
+
+    # Configure a route with no documentation fields declared.
+    mock_get_routers_evt.execute.return_value = [
+        ApiRouter(
+            name='health',
+            prefix='/health',
+            routes=[
+                ApiRoute(
+                    id='ping',
+                    endpoint='health.ping',
+                    path='/ping',
+                    methods=['GET'],
+                    status_code=200,
+                ),
+            ],
+        ),
+    ]
+
+    # Generate the specification.
+    spec = context.generate_spec()
+
+    # Assert the current bare operation shape is preserved.
+    assert spec['paths']['/health/ping']['get'] == {
+        'operationId': 'health.ping',
+        'responses': {
+            '200': {
+                'description': 'Successful response',
+            },
+        },
+    }
+
+
+# ** test: generate_spec_omits_unresolvable_model_schemas
+def test_generate_spec_omits_unresolvable_model_schemas(
+        context: OpenApiSessionContext,
+        mock_get_routers_evt: DomainEvent,
+    ) -> None:
+    '''
+    Test that unresolved model paths do not add schema-bearing operation fields.
+
+    :param context: The OpenApiSessionContext instance.
+    :type context: OpenApiSessionContext
+    :param mock_get_routers_evt: The mock get_routers domain event.
+    :type mock_get_routers_evt: DomainEvent
+    '''
+
+    # Configure a route with nonexistent request and response model paths.
+    mock_get_routers_evt.execute.return_value = [
+        ApiRouter(
+            name='health',
+            prefix='/health',
+            routes=[
+                ApiRoute(
+                    id='ping',
+                    endpoint='health.ping',
+                    path='/ping',
+                    methods=['GET'],
+                    status_code=200,
+                    request_model='missing.models.Request',
+                    response_model='missing.models.Response',
+                ),
+            ],
+        ),
+    ]
+
+    # Generate the specification.
+    operation = context.generate_spec()['paths']['/health/ping']['get']
+
+    # Assert unresolved schemas preserve the bare response structure.
+    assert 'requestBody' not in operation
+    assert 'content' not in operation['responses']['200']
 
 
 # ** test: generate_spec_multi_router

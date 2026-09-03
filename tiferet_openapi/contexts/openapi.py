@@ -138,6 +138,7 @@ class OpenApiSessionContext(AppSessionContext):
         except TiferetAPIError as api_error:
             api_error.status_code = status_code
             raise
+
     # * method: _resolve_model_schema
     def _resolve_model_schema(self, model_path: str) -> dict | None:
         '''
@@ -235,6 +236,7 @@ class OpenApiSessionContext(AppSessionContext):
 
                     # Add the operation to its HTTP method entry.
                     paths[full_path][method.lower()] = operation
+
         # Return the OpenAPI 3.0 spec.
         return {
             'openapi': '3.0.3',

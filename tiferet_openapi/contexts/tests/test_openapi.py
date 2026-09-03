@@ -41,6 +41,15 @@ class SpecResponseModel(BaseModel):
     result: int
 
 
+# ** model: not_a_pydantic_model
+class NotAPydanticModel:
+    '''
+    Plain class used to verify resolution failure for a non-Pydantic class.
+    '''
+
+    pass
+
+
 # *** fixtures
 
 # ** fixture: app_session
@@ -481,13 +490,13 @@ def test_generate_spec_preserves_bare_operation_without_documentation_fields(
     }
 
 
-# ** test: generate_spec_omits_unresolvable_model_schemas
-def test_generate_spec_omits_unresolvable_model_schemas(
+# ** test: generate_spec_propagates_unresolvable_model_error
+def test_generate_spec_propagates_unresolvable_model_error(
         context: OpenApiSessionContext,
         mock_get_routers_evt: DomainEvent,
     ) -> None:
     '''
-    Test that unresolved model paths do not add schema-bearing operation fields.
+    Test that an unresolvable model path fails spec generation loudly.
 
     :param context: The OpenApiSessionContext instance.
     :type context: OpenApiSessionContext
@@ -514,12 +523,110 @@ def test_generate_spec_omits_unresolvable_model_schemas(
         ),
     ]
 
-    # Generate the specification.
-    operation = context.generate_spec()['paths']['/health/ping']['get']
+    # Assert the structured error propagates out of generate_spec.
+    with pytest.raises(TiferetError) as exc_info:
+        context.generate_spec()
 
-    # Assert unresolved schemas preserve the bare response structure.
-    assert 'requestBody' not in operation
-    assert 'content' not in operation['responses']['200']
+    assert exc_info.value.error_code == 'OPENAPI_MODEL_RESOLUTION_FAILED'
+    assert exc_info.value.kwargs['model_path'] == 'missing.models.Request'
+
+
+# ** test: resolve_model_schema_valid_model_returns_schema
+def test_resolve_model_schema_valid_model_returns_schema(
+        context: OpenApiSessionContext,
+    ) -> None:
+    '''
+    Test that a valid, resolvable model path still resolves to its schema.
+
+    :param context: The OpenApiSessionContext instance.
+    :type context: OpenApiSessionContext
+    '''
+
+    # Resolve a valid model path.
+    schema = context._resolve_model_schema(f'{__name__}.SpecRequestModel')
+
+    # Assert the schema matches the model's own JSON schema.
+    assert schema == SpecRequestModel.model_json_schema()
+
+
+# ** test: resolve_model_schema_malformed_path_raises
+def test_resolve_model_schema_malformed_path_raises(
+        context: OpenApiSessionContext,
+    ) -> None:
+    '''
+    Test that a dotless model path raises the structured resolution error.
+
+    :param context: The OpenApiSessionContext instance.
+    :type context: OpenApiSessionContext
+    '''
+
+    # Attempt to resolve a path with no module/class separator.
+    with pytest.raises(TiferetError) as exc_info:
+        context._resolve_model_schema('NoDotModel')
+
+    assert exc_info.value.error_code == 'OPENAPI_MODEL_RESOLUTION_FAILED'
+    assert exc_info.value.kwargs['model_path'] == 'NoDotModel'
+
+
+# ** test: resolve_model_schema_missing_module_raises
+def test_resolve_model_schema_missing_module_raises(
+        context: OpenApiSessionContext,
+    ) -> None:
+    '''
+    Test that a nonexistent module raises the structured resolution error.
+
+    :param context: The OpenApiSessionContext instance.
+    :type context: OpenApiSessionContext
+    '''
+
+    # Attempt to resolve a path whose module does not exist.
+    with pytest.raises(TiferetError) as exc_info:
+        context._resolve_model_schema('nonexistent.module.path.Model')
+
+    assert exc_info.value.error_code == 'OPENAPI_MODEL_RESOLUTION_FAILED'
+    assert exc_info.value.kwargs['model_path'] == 'nonexistent.module.path.Model'
+
+
+# ** test: resolve_model_schema_missing_class_raises
+def test_resolve_model_schema_missing_class_raises(
+        context: OpenApiSessionContext,
+    ) -> None:
+    '''
+    Test that a class missing from an existing module raises the
+    structured resolution error.
+
+    :param context: The OpenApiSessionContext instance.
+    :type context: OpenApiSessionContext
+    '''
+
+    # Attempt to resolve a nonexistent class on an existing module.
+    model_path = f'{__name__}.NonexistentModel'
+    with pytest.raises(TiferetError) as exc_info:
+        context._resolve_model_schema(model_path)
+
+    assert exc_info.value.error_code == 'OPENAPI_MODEL_RESOLUTION_FAILED'
+    assert exc_info.value.kwargs['model_path'] == model_path
+
+
+# ** test: resolve_model_schema_non_pydantic_class_raises
+def test_resolve_model_schema_non_pydantic_class_raises(
+        context: OpenApiSessionContext,
+    ) -> None:
+    '''
+    Test that a resolvable class with no model_json_schema raises the
+    structured resolution error.
+
+    :param context: The OpenApiSessionContext instance.
+    :type context: OpenApiSessionContext
+    '''
+
+    # Attempt to resolve a class that is not a Pydantic model.
+    model_path = f'{__name__}.NotAPydanticModel'
+    with pytest.raises(TiferetError) as exc_info:
+        context._resolve_model_schema(model_path)
+
+    assert exc_info.value.error_code == 'OPENAPI_MODEL_RESOLUTION_FAILED'
+    assert exc_info.value.kwargs['model_path'] == model_path
 
 
 # ** test: generate_spec_multi_router

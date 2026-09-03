@@ -141,14 +141,16 @@ class OpenApiSessionContext(AppSessionContext):
             raise
 
     # * method: _resolve_model_schema
-    def _resolve_model_schema(self, model_path: str) -> dict | None:
+    def _resolve_model_schema(self, model_path: str) -> dict:
         '''
         Resolve a dotted import path to a Pydantic model JSON schema.
 
         :param model_path: The dotted path to the model class.
         :type model_path: str
-        :return: The JSON schema dict, or None when resolution fails.
-        :rtype: dict | None
+        :return: The JSON schema dict.
+        :rtype: dict
+        :raises TiferetError: When the path is malformed, the module or
+            class cannot be found, or the class has no model_json_schema.
         '''
 
         try:
@@ -161,8 +163,16 @@ class OpenApiSessionContext(AppSessionContext):
 
             # Return the Pydantic JSON schema.
             return model_cls.model_json_schema()
-        except Exception:
-            return None
+        except Exception as exception:
+            # Raise a structured error carrying the failing model path so
+            # a broken reference surfaces instead of silently resolving
+            # to a field that was never set.
+            TiferetError.raise_error(
+                'OPENAPI_MODEL_RESOLUTION_FAILED',
+                f'Failed to resolve model schema for path: {model_path}.',
+                model_path=model_path,
+                reason=str(exception),
+            )
 
     # * method: generate_spec
     def generate_spec(self, title: str = 'API', version: str = '1.0.0', description: str = '') -> dict:
@@ -177,6 +187,9 @@ class OpenApiSessionContext(AppSessionContext):
         :type description: str
         :return: An OpenAPI 3.0 spec dict.
         :rtype: dict
+        :raises TiferetError: When any route's request_model/response_model
+            path fails to resolve; the first such failure aborts the
+            entire spec generation call.
         '''
 
         # Retrieve all routers via the domain event.
@@ -213,27 +226,29 @@ class OpenApiSessionContext(AppSessionContext):
                         operation['tags'] = route.tags
 
                     # Include the resolved request schema when present.
+                    # Resolution failures propagate as a structured
+                    # TiferetError rather than being caught here, so a
+                    # broken model reference fails spec generation loudly
+                    # instead of silently producing an incomplete spec.
                     if route.request_model:
                         request_schema = self._resolve_model_schema(route.request_model)
-                        if request_schema:
-                            operation['requestBody'] = {
-                                'required': True,
-                                'content': {
-                                    'application/json': {
-                                        'schema': request_schema,
-                                    },
+                        operation['requestBody'] = {
+                            'required': True,
+                            'content': {
+                                'application/json': {
+                                    'schema': request_schema,
                                 },
-                            }
+                            },
+                        }
 
                     # Include the resolved response schema when present.
                     if route.response_model:
                         response_schema = self._resolve_model_schema(route.response_model)
-                        if response_schema:
-                            operation['responses'][str(route.status_code)]['content'] = {
-                                'application/json': {
-                                    'schema': response_schema,
-                                },
-                            }
+                        operation['responses'][str(route.status_code)]['content'] = {
+                            'application/json': {
+                                'schema': response_schema,
+                            },
+                        }
 
                     # Add the operation to its HTTP method entry.
                     paths[full_path][method.lower()] = operation

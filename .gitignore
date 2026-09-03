@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Tiferet collab process
+#   Working copies of RFPs and TRDs stay local; the published GitHub issue
+#   body is the source of truth (docs/collab/process.md).
+.rfp/
+.trd/

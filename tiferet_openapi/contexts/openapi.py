@@ -278,6 +278,7 @@ class OpenApiSessionContext(AppSessionContext):
         )
 
     # * method: create_docs_handler (obsolete)
+    # -- obsolete: Remove at the full v1.0.0 release after the deprecation window.
     def create_docs_handler(self,
             title: str = 'API',
             version: str = '1.0.0',

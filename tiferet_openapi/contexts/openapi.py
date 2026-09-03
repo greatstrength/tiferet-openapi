@@ -3,6 +3,7 @@
 # *** imports
 
 # ** core
+import importlib
 from typing import Any, Callable
 
 # ** infra
@@ -138,6 +139,30 @@ class OpenApiSessionContext(AppSessionContext):
             api_error.status_code = status_code
             raise
 
+    # * method: _resolve_model_schema
+    def _resolve_model_schema(self, model_path: str) -> dict | None:
+        '''
+        Resolve a dotted import path to a Pydantic model JSON schema.
+
+        :param model_path: The dotted path to the model class.
+        :type model_path: str
+        :return: The JSON schema dict, or None when resolution fails.
+        :rtype: dict | None
+        '''
+
+        try:
+            # Split the dotted path into module and class names.
+            module_path, class_name = model_path.rsplit('.', 1)
+
+            # Import the module and retrieve the model class.
+            module = importlib.import_module(module_path)
+            model_cls = getattr(module, class_name)
+
+            # Return the Pydantic JSON schema.
+            return model_cls.model_json_schema()
+        except Exception:
+            return None
+
     # * method: generate_spec
     def generate_spec(self, title: str = 'API', version: str = '1.0.0', description: str = '') -> dict:
         '''
@@ -164,7 +189,8 @@ class OpenApiSessionContext(AppSessionContext):
                 if full_path not in paths:
                     paths[full_path] = {}
                 for method in route.methods:
-                    paths[full_path][method.lower()] = {
+                    # Build the base operation entry.
+                    operation = {
                         'operationId': route.endpoint,
                         'responses': {
                             str(route.status_code): {
@@ -172,6 +198,44 @@ class OpenApiSessionContext(AppSessionContext):
                             },
                         },
                     }
+
+                    # Include the declared summary when present.
+                    if route.summary:
+                        operation['summary'] = route.summary
+
+                    # Include the declared description when present.
+                    if route.description:
+                        operation['description'] = route.description
+
+                    # Include the declared tags when present.
+                    if route.tags:
+                        operation['tags'] = route.tags
+
+                    # Include the resolved request schema when present.
+                    if route.request_model:
+                        request_schema = self._resolve_model_schema(route.request_model)
+                        if request_schema:
+                            operation['requestBody'] = {
+                                'required': True,
+                                'content': {
+                                    'application/json': {
+                                        'schema': request_schema,
+                                    },
+                                },
+                            }
+
+                    # Include the resolved response schema when present.
+                    if route.response_model:
+                        response_schema = self._resolve_model_schema(route.response_model)
+                        if response_schema:
+                            operation['responses'][str(route.status_code)]['content'] = {
+                                'application/json': {
+                                    'schema': response_schema,
+                                },
+                            }
+
+                    # Add the operation to its HTTP method entry.
+                    paths[full_path][method.lower()] = operation
 
         # Return the OpenAPI 3.0 spec.
         return {

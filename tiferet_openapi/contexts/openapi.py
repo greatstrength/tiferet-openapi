@@ -4,6 +4,7 @@
 
 # ** core
 import importlib
+import warnings
 from typing import Any, Callable
 
 # ** infra
@@ -248,17 +249,68 @@ class OpenApiSessionContext(AppSessionContext):
             'paths': paths,
         }
 
-    # * method: create_docs_handler
-    def create_docs_handler(self, **kwargs):
+    # * method: get_docs_spec
+    def get_docs_spec(self,
+            title: str = 'API',
+            version: str = '1.0.0',
+            description: str = '',
+            **kwargs) -> dict:
         '''
-        Create a documentation handler for serving the OpenAPI spec.
-        Base implementation returns None; override in framework-specific subclasses.
+        Return the generated OpenAPI specification for adapter rendering.
 
+        :param title: The API title.
+        :type title: str
+        :param version: The API version.
+        :type version: str
+        :param description: The API description.
+        :type description: str
         :param kwargs: Additional keyword arguments.
         :type kwargs: dict
-        :return: A framework-specific handler, or None.
-        :rtype: Any
+        :return: The generated OpenAPI 3.0 specification.
+        :rtype: dict
         '''
 
-        # Return None by default (no-op for base context).
-        return None
+        # Generate and return the framework-agnostic specification data.
+        return self.generate_spec(
+            title=title,
+            version=version,
+            description=description,
+        )
+
+    # * method: create_docs_handler (obsolete)
+    # -- obsolete: Remove at the full v1.0.0 release after the deprecation window.
+    def create_docs_handler(self,
+            title: str = 'API',
+            version: str = '1.0.0',
+            description: str = '',
+            **kwargs) -> dict:
+        '''
+        Return the generated OpenAPI specification through a deprecated alias.
+
+        :param title: The API title.
+        :type title: str
+        :param version: The API version.
+        :type version: str
+        :param description: The API description.
+        :type description: str
+        :param kwargs: Additional keyword arguments.
+        :type kwargs: dict
+        :return: The generated OpenAPI 3.0 specification.
+        :rtype: dict
+        :raises DeprecationWarning: Always, because this alias will be removed.
+        '''
+
+        # Warn callers to use the data-oriented replacement method.
+        warnings.warn(
+            'create_docs_handler is deprecated; use get_docs_spec instead.',
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        # Delegate specification creation to the replacement method.
+        return self.get_docs_spec(
+            title=title,
+            version=version,
+            description=description,
+            **kwargs,
+        )

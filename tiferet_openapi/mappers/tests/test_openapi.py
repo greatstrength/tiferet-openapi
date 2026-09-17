@@ -13,7 +13,6 @@ from ..openapi import (
     ApiRouterYamlObject,
 )
 
-
 # *** constants
 
 # ** constant: route_aggregate_data
@@ -47,7 +46,6 @@ ROUTER_YAML_DATA = dict(
     },
 )
 
-
 # *** fixtures
 
 # ** fixture: route_aggregate
@@ -62,7 +60,6 @@ def route_aggregate() -> ApiRouteAggregate:
 
     return ApiRouteAggregate(**ROUTE_AGGREGATE_DATA)
 
-
 # ** fixture: router_aggregate
 @pytest.fixture
 def router_aggregate() -> ApiRouterAggregate:
@@ -74,7 +71,6 @@ def router_aggregate() -> ApiRouterAggregate:
     '''
 
     return ApiRouterAggregate(**ROUTER_AGGREGATE_DATA)
-
 
 # *** tests
 
@@ -93,7 +89,6 @@ def test_api_route_aggregate_constructor(route_aggregate: ApiRouteAggregate) -> 
     assert route_aggregate.path == ROUTE_AGGREGATE_DATA['path']
     assert route_aggregate.methods == ROUTE_AGGREGATE_DATA['methods']
     assert route_aggregate.status_code == ROUTE_AGGREGATE_DATA['status_code']
-
 
 # ** test: api_router_aggregate_add_route
 def test_api_router_aggregate_add_route(router_aggregate: ApiRouterAggregate) -> None:
@@ -119,7 +114,6 @@ def test_api_router_aggregate_add_route(router_aggregate: ApiRouterAggregate) ->
     assert route.methods == ['GET']
     assert route.status_code == 200
 
-
 # ** test: api_router_aggregate_remove_route
 def test_api_router_aggregate_remove_route(router_aggregate: ApiRouterAggregate) -> None:
     '''
@@ -139,7 +133,6 @@ def test_api_router_aggregate_remove_route(router_aggregate: ApiRouterAggregate)
     # Verify the route was removed.
     assert len(router_aggregate.routes) == 0
 
-
 # ** test: api_route_yaml_object_map
 def test_api_route_yaml_object_map() -> None:
     '''
@@ -158,7 +151,6 @@ def test_api_route_yaml_object_map() -> None:
     assert aggregate.methods == ['GET']
     assert aggregate.status_code == 200
 
-
 # ** test: api_router_yaml_object_map
 def test_api_router_yaml_object_map() -> None:
     '''
@@ -176,7 +168,6 @@ def test_api_router_yaml_object_map() -> None:
     assert len(aggregate.routes) == 1
     assert aggregate.routes[0].id == 'get_users'
     assert aggregate.routes[0].endpoint == 'users.get_users'
-
 
 # ** test: api_route_from_model_round_trip
 def test_api_route_from_model_round_trip(route_aggregate: ApiRouteAggregate) -> None:
@@ -197,7 +188,6 @@ def test_api_route_from_model_round_trip(route_aggregate: ApiRouteAggregate) -> 
     assert result.path == route_aggregate.path
     assert result.methods == route_aggregate.methods
     assert result.status_code == route_aggregate.status_code
-
 
 # ** test: api_router_from_model_round_trip
 def test_api_router_from_model_round_trip() -> None:
@@ -220,7 +210,6 @@ def test_api_router_from_model_round_trip() -> None:
     assert result.routes[0].id == 'get_users'
     assert result.routes[0].endpoint == 'users.get_users'
     assert result.routes[0].path == '/users'
-
 
 # ** test: api_route_yaml_object_map_with_swagger_fields
 def test_api_route_yaml_object_map_with_swagger_fields() -> None:
@@ -248,7 +237,6 @@ def test_api_route_yaml_object_map_with_swagger_fields() -> None:
     assert aggregate.tags == ['calculator', 'arithmetic']
     assert aggregate.request_model == 'app.domain.request.AddNumberRequest'
     assert aggregate.response_model == 'app.domain.request.CalculatorResponse'
-
 
 # ** test: api_route_swagger_fields_round_trip
 def test_api_route_swagger_fields_round_trip() -> None:
@@ -281,7 +269,6 @@ def test_api_route_swagger_fields_round_trip() -> None:
     assert result.request_model == aggregate.request_model
     assert result.response_model == aggregate.response_model
 
-
 # ** test: api_route_yaml_object_map_without_swagger_fields
 def test_api_route_yaml_object_map_without_swagger_fields() -> None:
     '''
@@ -298,3 +285,36 @@ def test_api_route_yaml_object_map_without_swagger_fields() -> None:
     assert aggregate.tags == []
     assert aggregate.request_model is None
     assert aggregate.response_model is None
+
+# ** test: api_route_yaml_object_to_data_yaml_excludes_only_id_and_endpoint
+def test_api_route_yaml_object_to_data_yaml_excludes_only_id_and_endpoint() -> None:
+    '''
+    Test that the to_data.yaml role excludes only id and endpoint.
+    '''
+
+    # Verify the exclude set no longer drops tags.
+    assert ApiRouteYamlObject._ROLES['to_data.yaml']['exclude'] == {'id', 'endpoint'}
+
+# ** test: api_route_tags_round_trip_to_data_yaml
+def test_api_route_tags_round_trip_to_data_yaml() -> None:
+    '''
+    Test that a non-empty tags list survives to_data.yaml serialization.
+    '''
+
+    # Construct a route aggregate with tags.
+    aggregate = ApiRouteAggregate(
+        id='add',
+        endpoint='calc.add',
+        path='/add',
+        methods=['POST'],
+        status_code=200,
+        tags=['calculator', 'arithmetic'],
+    )
+
+    # Serialize via the YAML write role.
+    yaml_obj = ApiRouteYamlObject.from_model(aggregate)
+    data = yaml_obj.to_primitive(role='to_data.yaml')
+
+    # Verify tags survive the round-trip.
+    assert 'tags' in data
+    assert data['tags'] == ['calculator', 'arithmetic']

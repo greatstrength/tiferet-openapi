@@ -12,7 +12,6 @@ from tiferet import Aggregate, TransferObject
 # ** app
 from ..domain import ApiRoute, ApiRouter
 
-
 # *** mappers
 
 # ** mapper: api_route_aggregate
@@ -21,7 +20,6 @@ class ApiRouteAggregate(ApiRoute, Aggregate):
     Aggregate for the ApiRoute domain object.
     '''
     pass
-
 
 # ** mapper: api_router_aggregate
 class ApiRouterAggregate(ApiRouter, Aggregate):
@@ -82,7 +80,6 @@ class ApiRouterAggregate(ApiRouter, Aggregate):
         # Filter out the route with the given ID.
         self.routes = [r for r in self.routes if r.id != route_id]
 
-
 # ** mapper: api_route_yaml_object
 class ApiRouteYamlObject(ApiRoute, TransferObject):
     '''
@@ -94,7 +91,7 @@ class ApiRouteYamlObject(ApiRoute, TransferObject):
         'to_model': {},
         'to_data.yaml': {
             'by_alias': True,
-            'exclude': {'id', 'endpoint', 'tags'},
+            'exclude': {'id', 'endpoint'},
         },
     }
 
@@ -149,7 +146,6 @@ class ApiRouteYamlObject(ApiRoute, TransferObject):
 
         # Create a new transfer object from the model.
         return super().from_model(route, **overrides)
-
 
 # ** mapper: api_router_yaml_object
 class ApiRouterYamlObject(ApiRouter, TransferObject):

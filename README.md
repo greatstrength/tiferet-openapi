@@ -36,7 +36,8 @@ tiferet_openapi/
 ├── events/              — GetRouters, GetRoute, GetStatusCode (DomainEvent)
 ├── mappers/             — Aggregates and TransferObjects for YAML round-trip
 ├── repos/               — OpenApiYamlRepository (YamlLoader-backed OpenApiService)
-└── contexts/            — OpenApiContext (AppInterfaceContext), OpenApiRequestContext
+├── contexts/            — OpenApiSessionContext (AppSessionContext), OpenApiRequestContext
+└── blueprints/          — build_openapi_session_context, create_openapi_request_context
 ```
 
 ### Domain Objects
@@ -79,8 +80,9 @@ Aggregates and TransferObjects bridge YAML configuration and runtime domain obje
 
 ### Contexts
 
-- **`OpenApiContext(AppInterfaceContext)`** — Shared API context that receives `DomainEvent` instances for route and status code lookup. Provides `parse_request`, `handle_error` (with HTTP status code resolution), and `handle_response` (returning `(response, status_code)` tuples).
+- **`OpenApiSessionContext(AppSessionContext)`** — Shared session hub with injected route, status-code, and router handler callables. Provides `handle_error` (HTTP status on `TiferetAPIError`), `build_response` (returning `(response, status_code)` tuples), `generate_spec`, and `get_docs_spec`. `create_docs_handler` is a deprecated alias of `get_docs_spec`.
 - **`OpenApiRequestContext(RequestContext)`** — Pydantic-aware request context that serializes `BaseModel` results via `model_dump()`, with support for lists, dicts, `None`, and primitives.
+- **`build_openapi_session_context`** — Composition helper that wires the hub from a resolved app session and cache.
 
 ## YAML Configuration Format
 
@@ -121,15 +123,18 @@ Tiferet OpenAPI is consumed by framework-specific adapters. Here's how the share
 
 ### In tiferet-flask / tiferet-fast
 
-Framework adapters extend `OpenApiContext` and use `OpenApiYamlRepository` as their configuration backend:
+Framework adapters compose `OpenApiSessionContext` via `build_openapi_session_context` and use `OpenApiYamlRepository` as their configuration backend:
 
 ```python
-# Framework adapter context (e.g., FlaskApiContext)
-from tiferet_openapi import OpenApiContext, OpenApiRequestContext
+from tiferet_openapi import (
+    OpenApiSessionContext,
+    OpenApiRequestContext,
+    build_openapi_session_context,
+)
 
-class FlaskApiContext(OpenApiContext):
-    # Inherits parse_request, handle_error, handle_response
-    # Adds Flask-specific builder logic
+# Framework adapter context (e.g., FlaskApiContext)
+class FlaskApiContext(OpenApiSessionContext):
+    # Inherits handle_error, build_response, generate_spec, get_docs_spec
     pass
 ```
 
@@ -172,7 +177,7 @@ Tests are co-located in `<package>/tests/` directories:
 - **Domain/mapper tests** use direct Pydantic constructors.
 - **Event tests** use `DomainEvent.handle()` with mocked `OpenApiService`.
 - **Repo tests** are integration tests using `tmp_path` with real YAML files.
-- **Context tests** use `mock.Mock(spec=DomainEvent)` for event dependencies.
+- **Context tests** inject mock handler callables for route, status-code, and router lookup.
 
 ## License
 

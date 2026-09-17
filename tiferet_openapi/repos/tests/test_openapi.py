@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 
 # ** app
+from tiferet import use_tester
 from ..openapi import OpenApiYamlRepository
-
 
 # *** constants
 
@@ -60,252 +60,316 @@ fast:
     UNAUTHORIZED: 401
 """
 
-
 # *** fixtures
 
 # ** fixture: openapi_yaml_file
 @pytest.fixture
-def openapi_yaml_file(tmp_path: Path) -> Path:
+def openapi_yaml_file(tmp_path: Path) -> str:
     '''
     Create a temporary openapi.yml file for testing.
 
     :param tmp_path: The temporary directory path.
     :type tmp_path: Path
     :return: Path to the temporary YAML file.
-    :rtype: Path
+    :rtype: str
     '''
 
     # Write the YAML content to a temporary file.
     file_path = tmp_path / 'openapi.yml'
     file_path.write_text(OPENAPI_YAML_CONTENT, encoding='utf-8')
-    return file_path
-
+    return str(file_path)
 
 # ** fixture: fast_yaml_file
 @pytest.fixture
-def fast_yaml_file(tmp_path: Path) -> Path:
+def fast_yaml_file(tmp_path: Path) -> str:
     '''
     Create a temporary fast.yml file for testing.
 
     :param tmp_path: The temporary directory path.
     :type tmp_path: Path
     :return: Path to the temporary YAML file.
-    :rtype: Path
+    :rtype: str
     '''
 
     # Write the YAML content to a temporary file.
     file_path = tmp_path / 'fast.yml'
     file_path.write_text(FAST_YAML_CONTENT, encoding='utf-8')
-    return file_path
+    return str(file_path)
 
+# *** testers
 
-# ** fixture: repo
-@pytest.fixture
-def repo(openapi_yaml_file: Path) -> OpenApiYamlRepository:
+# ** tester: test_openapi_yaml_repository
+@use_tester(
+    type='repo',
+    target_cls=OpenApiYamlRepository,
+    config_parameter='openapi_yaml_file',
+)
+class TestOpenApiYamlRepository:
     '''
-    Create an OpenApiYamlRepository with default root_key.
-
-    :param openapi_yaml_file: Path to the temporary YAML file.
-    :type openapi_yaml_file: Path
-    :return: The repository instance.
-    :rtype: OpenApiYamlRepository
-    '''
-
-    # Return a repository instance with the default root key.
-    return OpenApiYamlRepository(
-        openapi_yaml_file=str(openapi_yaml_file),
-    )
-
-
-# ** fixture: fast_repo
-@pytest.fixture
-def fast_repo(fast_yaml_file: Path) -> OpenApiYamlRepository:
-    '''
-    Create an OpenApiYamlRepository with root_key='fast'.
-
-    :param fast_yaml_file: Path to the temporary YAML file.
-    :type fast_yaml_file: Path
-    :return: The repository instance.
-    :rtype: OpenApiYamlRepository
+    Tests for OpenApiYamlRepository using the repo tester.
     '''
 
-    # Return a repository instance with the 'fast' root key.
-    return OpenApiYamlRepository(
-        openapi_yaml_file=str(fast_yaml_file),
-        root_key='fast',
-    )
+    # * test: get_routers_default_root_key
+    def test_get_routers_default_root_key(
+            self,
+            test_ctx,
+            openapi_yaml_file: str,
+        ) -> None:
+        '''
+        Test that get_routers loads and maps routers with the default 'openapi' root key.
 
+        :param test_ctx: The bound repo tester context.
+        :type test_ctx: object
+        :param openapi_yaml_file: Path to the temporary YAML file.
+        :type openapi_yaml_file: str
+        :return: None
+        :rtype: None
+        '''
 
-# *** tests
+        # Construct the repository against the seeded config file.
+        repo = test_ctx.make_target(config_file=openapi_yaml_file)
 
-# ** test: get_routers_default_root_key
-def test_get_routers_default_root_key(repo: OpenApiYamlRepository) -> None:
-    '''
-    Test that get_routers loads and maps routers with the default 'openapi' root key.
+        # Retrieve all routers.
+        routers = repo.get_routers()
 
-    :param repo: The repository instance.
-    :type repo: OpenApiYamlRepository
-    '''
+        # Assert two routers were loaded.
+        assert len(routers) == 2
 
-    # Retrieve all routers.
-    routers = repo.get_routers()
+        # Assert router names.
+        router_names = [r.name for r in routers]
+        assert 'calc' in router_names
+        assert 'health' in router_names
 
-    # Assert two routers were loaded.
-    assert len(routers) == 2
+        # Assert calc router details.
+        calc_router = next(r for r in routers if r.name == 'calc')
+        assert calc_router.prefix == '/calc'
+        assert len(calc_router.routes) == 2
 
-    # Assert router names.
-    router_names = [r.name for r in routers]
-    assert 'calc' in router_names
-    assert 'health' in router_names
+        # Assert route details.
+        add_route = next(r for r in calc_router.routes if r.id == 'add')
+        assert add_route.endpoint == 'calc.add'
+        assert add_route.path == '/add'
+        assert add_route.methods == ['POST']
+        assert add_route.status_code == 200
 
-    # Assert calc router details.
-    calc_router = next(r for r in routers if r.name == 'calc')
-    assert calc_router.prefix == '/calc'
-    assert len(calc_router.routes) == 2
+    # * test: get_routers_alternate_root_key
+    def test_get_routers_alternate_root_key(
+            self,
+            test_ctx,
+            fast_yaml_file: str,
+        ) -> None:
+        '''
+        Test that get_routers works with root_key='fast'.
 
-    # Assert route details.
-    add_route = next(r for r in calc_router.routes if r.id == 'add')
-    assert add_route.endpoint == 'calc.add'
-    assert add_route.path == '/add'
-    assert add_route.methods == ['POST']
-    assert add_route.status_code == 200
+        :param test_ctx: The bound repo tester context.
+        :type test_ctx: object
+        :param fast_yaml_file: Path to the temporary YAML file.
+        :type fast_yaml_file: str
+        :return: None
+        :rtype: None
+        '''
 
+        # Construct the repository and switch to the alternate root key.
+        repo = test_ctx.make_target(config_file=fast_yaml_file)
+        repo.root_key = 'fast'
 
-# ** test: get_routers_alternate_root_key
-def test_get_routers_alternate_root_key(fast_repo: OpenApiYamlRepository) -> None:
-    '''
-    Test that get_routers works with root_key='fast'.
+        # Retrieve all routers.
+        routers = repo.get_routers()
 
-    :param fast_repo: The repository instance with fast root key.
-    :type fast_repo: OpenApiYamlRepository
-    '''
+        # Assert one router was loaded.
+        assert len(routers) == 1
+        assert routers[0].name == 'api'
+        assert routers[0].prefix == '/api'
 
-    # Retrieve all routers.
-    routers = fast_repo.get_routers()
+        # Assert route details.
+        assert len(routers[0].routes) == 1
+        assert routers[0].routes[0].id == 'list_items'
+        assert routers[0].routes[0].endpoint == 'api.list_items'
 
-    # Assert one router was loaded.
-    assert len(routers) == 1
-    assert routers[0].name == 'api'
-    assert routers[0].prefix == '/api'
+    # * test: get_route_found
+    def test_get_route_found(
+            self,
+            test_ctx,
+            openapi_yaml_file: str,
+        ) -> None:
+        '''
+        Test that get_route returns the correct route when found.
 
-    # Assert route details.
-    assert len(routers[0].routes) == 1
-    assert routers[0].routes[0].id == 'list_items'
-    assert routers[0].routes[0].endpoint == 'api.list_items'
+        :param test_ctx: The bound repo tester context.
+        :type test_ctx: object
+        :param openapi_yaml_file: Path to the temporary YAML file.
+        :type openapi_yaml_file: str
+        :return: None
+        :rtype: None
+        '''
 
+        # Construct the repository against the seeded config file.
+        repo = test_ctx.make_target(config_file=openapi_yaml_file)
 
-# ** test: get_route_found
-def test_get_route_found(repo: OpenApiYamlRepository) -> None:
-    '''
-    Test that get_route returns the correct route when found.
+        # Retrieve a specific route.
+        route = repo.get_route('add')
 
-    :param repo: The repository instance.
-    :type repo: OpenApiYamlRepository
-    '''
+        # Assert the route was found.
+        assert route is not None
+        assert route.id == 'add'
+        assert route.endpoint == 'calc.add'
+        assert route.path == '/add'
 
-    # Retrieve a specific route.
-    route = repo.get_route('add')
+    # * test: get_route_not_found
+    def test_get_route_not_found(
+            self,
+            test_ctx,
+            openapi_yaml_file: str,
+        ) -> None:
+        '''
+        Test that get_route returns None when the route is not found.
 
-    # Assert the route was found.
-    assert route is not None
-    assert route.id == 'add'
-    assert route.endpoint == 'calc.add'
-    assert route.path == '/add'
+        :param test_ctx: The bound repo tester context.
+        :type test_ctx: object
+        :param openapi_yaml_file: Path to the temporary YAML file.
+        :type openapi_yaml_file: str
+        :return: None
+        :rtype: None
+        '''
 
+        # Construct the repository against the seeded config file.
+        repo = test_ctx.make_target(config_file=openapi_yaml_file)
 
-# ** test: get_route_not_found
-def test_get_route_not_found(repo: OpenApiYamlRepository) -> None:
-    '''
-    Test that get_route returns None when the route is not found.
+        # Retrieve a non-existent route.
+        route = repo.get_route('nonexistent')
 
-    :param repo: The repository instance.
-    :type repo: OpenApiYamlRepository
-    '''
+        # Assert None was returned.
+        assert route is None
 
-    # Retrieve a non-existent route.
-    route = repo.get_route('nonexistent')
+    # * test: get_route_filtered_by_router_name
+    def test_get_route_filtered_by_router_name(
+            self,
+            test_ctx,
+            openapi_yaml_file: str,
+        ) -> None:
+        '''
+        Test that get_route filters by router_name when provided.
 
-    # Assert None was returned.
-    assert route is None
+        :param test_ctx: The bound repo tester context.
+        :type test_ctx: object
+        :param openapi_yaml_file: Path to the temporary YAML file.
+        :type openapi_yaml_file: str
+        :return: None
+        :rtype: None
+        '''
 
+        # Construct the repository against the seeded config file.
+        repo = test_ctx.make_target(config_file=openapi_yaml_file)
 
-# ** test: get_route_filtered_by_router_name
-def test_get_route_filtered_by_router_name(repo: OpenApiYamlRepository) -> None:
-    '''
-    Test that get_route filters by router_name when provided.
+        # Retrieve a route scoped to the 'calc' router.
+        route = repo.get_route('add', router_name='calc')
+        assert route is not None
+        assert route.endpoint == 'calc.add'
 
-    :param repo: The repository instance.
-    :type repo: OpenApiYamlRepository
-    '''
+        # Attempt to retrieve 'add' from the 'health' router (should not exist).
+        route = repo.get_route('add', router_name='health')
+        assert route is None
 
-    # Retrieve a route scoped to the 'calc' router.
-    route = repo.get_route('add', router_name='calc')
-    assert route is not None
-    assert route.endpoint == 'calc.add'
+    # * test: get_route_filtered_by_wrong_router_name
+    def test_get_route_filtered_by_wrong_router_name(
+            self,
+            test_ctx,
+            openapi_yaml_file: str,
+        ) -> None:
+        '''
+        Test that get_route returns None when router_name does not match.
 
-    # Attempt to retrieve 'add' from the 'health' router (should not exist).
-    route = repo.get_route('add', router_name='health')
-    assert route is None
+        :param test_ctx: The bound repo tester context.
+        :type test_ctx: object
+        :param openapi_yaml_file: Path to the temporary YAML file.
+        :type openapi_yaml_file: str
+        :return: None
+        :rtype: None
+        '''
 
+        # Construct the repository against the seeded config file.
+        repo = test_ctx.make_target(config_file=openapi_yaml_file)
 
-# ** test: get_route_filtered_by_wrong_router_name
-def test_get_route_filtered_by_wrong_router_name(repo: OpenApiYamlRepository) -> None:
-    '''
-    Test that get_route returns None when router_name does not match.
+        # Retrieve 'ping' from the 'calc' router (should not exist there).
+        route = repo.get_route('ping', router_name='calc')
+        assert route is None
 
-    :param repo: The repository instance.
-    :type repo: OpenApiYamlRepository
-    '''
+        # Retrieve 'ping' from the correct 'health' router.
+        route = repo.get_route('ping', router_name='health')
+        assert route is not None
+        assert route.endpoint == 'health.ping'
 
-    # Retrieve 'ping' from the 'calc' router (should not exist there).
-    route = repo.get_route('ping', router_name='calc')
-    assert route is None
+    # * test: get_status_code_mapped
+    def test_get_status_code_mapped(
+            self,
+            test_ctx,
+            openapi_yaml_file: str,
+        ) -> None:
+        '''
+        Test that get_status_code returns the mapped status code.
 
-    # Retrieve 'ping' from the correct 'health' router.
-    route = repo.get_route('ping', router_name='health')
-    assert route is not None
-    assert route.endpoint == 'health.ping'
+        :param test_ctx: The bound repo tester context.
+        :type test_ctx: object
+        :param openapi_yaml_file: Path to the temporary YAML file.
+        :type openapi_yaml_file: str
+        :return: None
+        :rtype: None
+        '''
 
+        # Construct the repository against the seeded config file.
+        repo = test_ctx.make_target(config_file=openapi_yaml_file)
 
-# ** test: get_status_code_mapped
-def test_get_status_code_mapped(repo: OpenApiYamlRepository) -> None:
-    '''
-    Test that get_status_code returns the mapped status code.
+        # Assert mapped error codes return the correct status.
+        assert repo.get_status_code('INVALID_INPUT') == 400
+        assert repo.get_status_code('DIVISION_BY_ZERO') == 422
+        assert repo.get_status_code('NOT_FOUND') == 404
 
-    :param repo: The repository instance.
-    :type repo: OpenApiYamlRepository
-    '''
+    # * test: get_status_code_default
+    def test_get_status_code_default(
+            self,
+            test_ctx,
+            openapi_yaml_file: str,
+        ) -> None:
+        '''
+        Test that get_status_code returns 500 for unknown error codes.
 
-    # Assert mapped error codes return the correct status.
-    assert repo.get_status_code('INVALID_INPUT') == 400
-    assert repo.get_status_code('DIVISION_BY_ZERO') == 422
-    assert repo.get_status_code('NOT_FOUND') == 404
+        :param test_ctx: The bound repo tester context.
+        :type test_ctx: object
+        :param openapi_yaml_file: Path to the temporary YAML file.
+        :type openapi_yaml_file: str
+        :return: None
+        :rtype: None
+        '''
 
+        # Construct the repository against the seeded config file.
+        repo = test_ctx.make_target(config_file=openapi_yaml_file)
 
-# ** test: get_status_code_default
-def test_get_status_code_default(repo: OpenApiYamlRepository) -> None:
-    '''
-    Test that get_status_code returns 500 for unknown error codes.
+        # Assert unknown error codes default to 500.
+        assert repo.get_status_code('UNKNOWN_ERROR') == 500
 
-    :param repo: The repository instance.
-    :type repo: OpenApiYamlRepository
-    '''
+    # * test: get_status_code_alternate_root_key
+    def test_get_status_code_alternate_root_key(
+            self,
+            test_ctx,
+            fast_yaml_file: str,
+        ) -> None:
+        '''
+        Test that get_status_code works with an alternate root key.
 
-    # Assert unknown error codes default to 500.
-    assert repo.get_status_code('UNKNOWN_ERROR') == 500
+        :param test_ctx: The bound repo tester context.
+        :type test_ctx: object
+        :param fast_yaml_file: Path to the temporary YAML file.
+        :type fast_yaml_file: str
+        :return: None
+        :rtype: None
+        '''
 
+        # Construct the repository and switch to the alternate root key.
+        repo = test_ctx.make_target(config_file=fast_yaml_file)
+        repo.root_key = 'fast'
 
-# ** test: get_status_code_alternate_root_key
-def test_get_status_code_alternate_root_key(fast_repo: OpenApiYamlRepository) -> None:
-    '''
-    Test that get_status_code works with an alternate root key.
+        # Assert mapped error code from the fast config.
+        assert repo.get_status_code('UNAUTHORIZED') == 401
 
-    :param fast_repo: The repository instance with fast root key.
-    :type fast_repo: OpenApiYamlRepository
-    '''
-
-    # Assert mapped error code from the fast config.
-    assert fast_repo.get_status_code('UNAUTHORIZED') == 401
-
-    # Assert unknown error codes still default to 500.
-    assert fast_repo.get_status_code('UNKNOWN') == 500
+        # Assert unknown error codes still default to 500.
+        assert repo.get_status_code('UNKNOWN') == 500

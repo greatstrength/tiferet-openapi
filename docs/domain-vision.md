@@ -38,7 +38,7 @@ tiferet-openapi does not run a web server or own the wire-level details of recei
 
 It does not decide what a route's business logic does. Declaring a route here says what it looks like from the outside, not what happens once a request reaches it — that belongs to the feature or workflow the route triggers.
 
-It does not build its own documentation viewer. It produces the specification a viewer reads; which viewer a given framework adapter chooses to serve it through is that adapter's decision, not this domain's.
+It does not build its own documentation viewer. `OpenApiSessionContext.get_docs_spec` returns the generated specification data; rendering that data as a browsable page, and choosing which viewer serves it, remains the framework adapter's responsibility.
 
 It does not validate business rules. Confirming that a request has the right shape is in scope; confirming that the values inside it make sense for the business is not — that judgment belongs to the domain logic the route calls into.
 

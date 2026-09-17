@@ -36,7 +36,7 @@ and three axes of variation:
 
 **Model path** — a dotted import string (e.g. `app.domain.request.AddRequest`) stored in `ApiRoute.request_model` or `.response_model`, naming a Pydantic model class without importing it at declaration time. It is resolved only when something asks for its schema (Section 4).
 
-**`OpenApiContext`** — the runtime context that wires the three domain events together and implements `parse_request`, `handle_error`, `handle_response`, `generate_spec`, and `create_docs_handler`. It is the one class a framework-specific adapter (outside this repo) is expected to subclass.
+**`OpenApiSessionContext`** — the runtime context that wires the three domain events into the application session hub and implements status-aware response/error handling, `generate_spec`, and `get_docs_spec`. `get_docs_spec` returns generated specification data; it does not render an HTTP documentation page. `create_docs_handler` is retained as a deprecated alias for one release. A framework-specific adapter (outside this repo) owns rendering the returned data as a browsable page.
 
 **`OpenApiRequestContext`** — a request context that serializes a `BaseModel`, or a list/dict of them, via `model_dump()` before handing a result back to a caller.
 
@@ -79,21 +79,21 @@ On `v1.x-proto` (PR #22), `generate_spec` (proto `tiferet_openapi/contexts/opena
 **Verdict:** this is squarely the declared-vs-consumed-parity axis (Section 2, axis 3). It is not a designed variation — the fields and the method that should read them were never in question at the same time; they landed two releases apart, and only proto has closed the gap. Treat this as an incompleteness to resolve, not a feature to preserve as optional.
 
 ### 5.4 Publishing documentation
-*Hand the generated specification to something a client can actually open.*
+*Hand the generated specification data to the framework adapter that can make it client-facing.*
 
-`create_docs_handler` (`tiferet_openapi/contexts/openapi.py:195-208` on `main`; identical content at proto's `contexts/openapi.py:261-273`) is a documented no-op: it accepts arbitrary `**kwargs` and unconditionally returns `None`, with a docstring stating that a framework-specific subclass should override it.
+`OpenApiSessionContext.get_docs_spec` returns the serializable OpenAPI 3.0 dictionary that `generate_spec` derives from configured routers. It is intentionally framework-agnostic: it returns data rather than an HTTP handler or documentation viewer. `create_docs_handler` delegates to it as a deprecated compatibility alias for one release.
 
-**Verdict:** variable by construction — but today there is no variation to point at, because no subclass exists anywhere in this repo. The vision's fourth pipeline step, Publish, is a named seam with zero concrete behavior behind it (Section 8, Section 9).
+**Verdict:** variable by construction. This domain supplies the generated specification data; each framework adapter owns choosing and serving a browsable documentation renderer (Section 8, Section 9).
 
 ## 6. How the behaviors compose
-Declare runs once per configuration load; Serve runs once per request; Generate runs on demand (typically once per docs-endpoint hit, not once per request); Publish would run once per Generate call, if anything implemented it. A parallel error path joins Serve independently of the main pipeline: any `TiferetError` raised during a request is resolved to a status code through the same `OpenApiService` the Declare step populated.
+Declare runs once per configuration load; Serve runs once per request; Generate runs on demand (typically once per docs-endpoint hit, not once per request); Publish hands `get_docs_spec`'s data to the adapter's chosen renderer. A parallel error path joins Serve independently of the main pipeline: any `TiferetError` raised during a request is resolved to a status code through the same `OpenApiService` the Declare step populated.
 
 ```mermaid
 flowchart LR
   YAML([root_key-scoped YAML]) --> DECL["5.1 Declare<br/>get_routers / get_route"]
   DECL --> SERVE["5.2 Serve<br/>parse_request / handle_response"]
   DECL --> GEN["5.3 Generate<br/>generate_spec"]
-  GEN --> PUB["5.4 Publish<br/>create_docs_handler (no-op)"]
+  GEN --> PUB["5.4 Publish<br/>get_docs_spec → adapter renderer"]
   ERR(["TiferetError"]) --> STATUS["handle_error<br/>get_status_code_handler"]
   DECL --> STATUS
   STATUS --> SERVE
@@ -118,13 +118,13 @@ Judging whether a `request_model`/`response_model` declaration is *correct* is n
 
 **Variable — one definition per consuming application:**
 - The `root_key` value chosen for a given deployment's configuration file.
-- Which framework subclasses `OpenApiContext` and implements `parse_request`/`handle_error`/`handle_response` glue and `create_docs_handler`.
+- Which framework adapter renders the specification returned by `OpenApiSessionContext.get_docs_spec` as a browsable documentation page.
 - The actual `ApiRequestModel`/`ApiResponseModel` subclasses an application defines, and the dotted paths that name them.
 - The error-code-to-status-code data itself.
 
 **Currently entangled — the honest inventory:**
 - **`ApiRoute`'s documentation fields and `generate_spec` disagree about what exists, on `main`.** `summary`, `description`, `tags`, `request_model`, and `response_model` (`tiferet_openapi/domain/openapi.py:53-81`) have been declarable since v0.1.1/v0.1.2; `generate_spec` on `main` (`tiferet_openapi/contexts/openapi.py:149-193` on `main`) ignores all five. `v1.x-proto` PR #22 closes this specific gap (Section 5.3) but has not been reconstructed to trunk, and shipped without an RFP behind it — an out-of-process precedent this distillation surfaces rather than quietly inherits.
-- **Publish is a name, not a behavior.** `create_docs_handler` (`tiferet_openapi/contexts/openapi.py:195-208` on `main`) returns `None` unconditionally on both branches. The vision commits to "a documentation page a client can open"; no code in this repo, on either branch, produces one.
+- **Publish stops at the framework boundary.** `OpenApiSessionContext.get_docs_spec` provides the generated specification data, while a framework adapter remains responsible for serving it through a browsable documentation page.
 - **`_resolve_model_schema` fails silently.** An unresolvable `request_model`/`response_model` path (proto `tiferet_openapi/contexts/openapi.py:161-172`) is caught and turned into `None`, which `generate_spec` then treats as "nothing to add" rather than "something is wrong." This directly contradicts the vision's claim that documentation "can't quietly go stale" — a broken model reference degrades silently instead of surfacing.
 - **A separate mapper defect travels with the same PR.** `mappers/openapi.py:97` on `main` excludes `'tags'` from the YAML `to_data` role, so a router's tags do not round-trip through a YAML write on trunk today; proto's `mappers/openapi.py:97` removes that exclusion. This is bundled with the `generate_spec` fix in PR #22 but is a distinct correctness issue, not a documentation-completeness one.
 
@@ -133,12 +133,12 @@ Judging whether a `request_model`/`response_model` declaration is *correct* is n
 
 **Outside the domain, and who owns it instead:**
 - Running an HTTP server and routing an actual incoming request to a handler — owned by the framework adapter (`tiferet-flask`, `tiferet-fast`, or a future one), not this repo.
-- Rendering or serving the generated specification as a browsable documentation page — `create_docs_handler` is the named seam; the implementation is the adapter's, once one exists (Section 5.4, Section 8).
+- Rendering or serving the generated specification as a browsable documentation page — `OpenApiSessionContext.get_docs_spec` supplies data only; the framework adapter chooses and implements the renderer (Section 5.4, Section 8).
 - What a route's business logic does once a request reaches it — owned by the feature or workflow the route triggers, not by the route's declaration.
 - Validating that request data makes business sense beyond matching its declared shape — owned by the domain logic the route calls into, not by this layer's request/response models.
 
 ## 10. Where this leads
 1. **Reconstruct the `generate_spec`/`_resolve_model_schema` wiring and the `mappers/openapi.py:97` tags round-trip fix onto trunk**, via a proper RFP rather than the direct proto commit (PR #22) that introduced them — the declared-vs-consumed-parity gap in Section 5.3/Section 8 is the clearest, most concrete v1 candidate this distillation found.
-2. **Decide whether `create_docs_handler` gets an implementation, or stays an explicitly out-of-scope seam, for v1.** Right now the vision promises a documentation page and the code offers only a hook; a v1 that ships without resolving this should say so on purpose, not by omission.
+2. **Implement framework-adapter documentation renderers.** `get_docs_spec` now supplies the framework-agnostic document; each adapter still needs to expose that data through its own browsable documentation page.
 3. **Decide whether `_resolve_model_schema` should surface a resolution failure instead of silently returning `None`,** since the current behavior is in direct tension with the vision's core promise that documentation cannot quietly drift from the truth.
 4. **This is the actual v1 freeze-point question:** does a v1 catalog include the doc-field wiring and a working docs handler, or is that deferred to a v2 line while v1 freezes the narrower Declare/Serve/Generate-without-doc-fields shape that already exists on trunk today? Everything else in this document is groundwork for answering that one question.

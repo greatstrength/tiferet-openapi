@@ -8,7 +8,6 @@ from unittest import mock
 
 # ** infra
 import pytest
-from pydantic import BaseModel
 from tiferet import TiferetError, TiferetAPIError
 from tiferet.contexts.app import AppSessionContext
 from tiferet.domain import AppSession
@@ -17,26 +16,7 @@ from tiferet.domain import AppSession
 from ...domain import ApiRoute, ApiRouter
 from ..openapi import OpenApiSessionContext
 from ..request import OpenApiRequestContext
-
-# *** models
-
-# ** model: spec_request_model
-class SpecRequestModel(BaseModel):
-    '''
-    Request payload model used to verify generated request schemas.
-    '''
-
-    # * attribute: amount
-    amount: int
-
-# ** model: spec_response_model
-class SpecResponseModel(BaseModel):
-    '''
-    Response payload model used to verify generated response schemas.
-    '''
-
-    # * attribute: result
-    result: int
+from .models import SpecRequestModel, SpecResponseModel
 
 # *** fixtures
 
@@ -384,8 +364,8 @@ def test_generate_spec_includes_documentation_fields_and_schemas(
                     summary='Add numbers',
                     description='Adds two supplied numbers.',
                     tags=['calculation'],
-                    request_model=f'{__name__}.SpecRequestModel',
-                    response_model=f'{__name__}.SpecResponseModel',
+                    request_model=f'{SpecRequestModel.__module__}.SpecRequestModel',
+                    response_model=f'{SpecResponseModel.__module__}.SpecResponseModel',
                 ),
             ],
         ),

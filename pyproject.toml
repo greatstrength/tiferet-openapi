@@ -9,7 +9,7 @@ license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "tiferet>=2.0.3"
+    "tiferet>=2.1.1"
 ]
 
 [project.urls]

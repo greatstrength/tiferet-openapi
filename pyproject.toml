@@ -31,6 +31,7 @@ build-backend = "setuptools.build_meta"
 where = ["."]
 include = [
     "tiferet_openapi",
+    "tiferet_openapi.blueprints",
     "tiferet_openapi.contexts",
     "tiferet_openapi.domain",
     "tiferet_openapi.events",

@@ -584,14 +584,95 @@ def test_generate_spec_multiple_methods(
     assert spec['paths']['/api/item']['get']['operationId'] == 'items.item'
     assert spec['paths']['/api/item']['post']['operationId'] == 'items.item'
 
-# ** test: create_docs_handler_returns_none
-def test_create_docs_handler_returns_none(context: OpenApiSessionContext) -> None:
+# ** test: get_docs_spec_returns_openapi_spec
+def test_get_docs_spec_returns_openapi_spec(
+        context: OpenApiSessionContext,
+        get_routers_handler: Callable,
+    ) -> None:
     '''
-    Test that create_docs_handler returns None by default.
+    Test that get_docs_spec returns a well-formed OpenAPI specification.
 
     :param context: The OpenApiSessionContext instance.
     :type context: OpenApiSessionContext
+    :param get_routers_handler: The mock routers-lookup handler.
+    :type get_routers_handler: Callable
     '''
 
-    # Assert the base create_docs_handler returns None.
-    assert context.create_docs_handler() is None
+    # Configure a router with one route.
+    get_routers_handler.return_value = [
+        ApiRouter(
+            name='calc',
+            prefix='/calc',
+            routes=[
+                ApiRoute(
+                    id='add',
+                    endpoint='calc.add',
+                    path='/add',
+                    methods=['POST'],
+                    status_code=200,
+                ),
+            ],
+        ),
+    ]
+
+    # Retrieve the generated specification through the public accessor.
+    spec = context.get_docs_spec()
+
+    # Assert the returned document is a non-empty OpenAPI 3.0 specification.
+    assert spec
+    assert spec['openapi'].startswith('3.0.')
+    assert spec['info'] == {
+        'title': 'API',
+        'version': '1.0.0',
+        'description': '',
+    }
+    assert spec['paths']['/calc/add']['post']['operationId'] == 'calc.add'
+
+# ** test: create_docs_handler_delegates_with_deprecation_warning
+def test_create_docs_handler_delegates_with_deprecation_warning(
+        context: OpenApiSessionContext,
+        get_routers_handler: Callable,
+    ) -> None:
+    '''
+    Test that create_docs_handler delegates to get_docs_spec with a warning.
+
+    :param context: The OpenApiSessionContext instance.
+    :type context: OpenApiSessionContext
+    :param get_routers_handler: The mock routers-lookup handler.
+    :type get_routers_handler: Callable
+    '''
+
+    # Configure a router with one route.
+    get_routers_handler.return_value = [
+        ApiRouter(
+            name='health',
+            prefix='',
+            routes=[
+                ApiRoute(
+                    id='ping',
+                    endpoint='health.ping',
+                    path='/ping',
+                    methods=['GET'],
+                    status_code=200,
+                ),
+            ],
+        ),
+    ]
+
+    # Retrieve the expected specification from the replacement method.
+    expected_spec = context.get_docs_spec(
+        title='Health API',
+        version='2.0.0',
+        description='Health check endpoints.',
+    )
+
+    # Invoke the deprecated alias with matching arguments.
+    with pytest.warns(DeprecationWarning, match='create_docs_handler is deprecated'):
+        spec = context.create_docs_handler(
+            title='Health API',
+            version='2.0.0',
+            description='Health check endpoints.',
+        )
+
+    # Assert the alias returns exactly the replacement method's result.
+    assert spec == expected_spec

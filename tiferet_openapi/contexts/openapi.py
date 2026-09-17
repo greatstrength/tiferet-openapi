@@ -6,14 +6,9 @@
 from typing import Any, Callable
 
 # ** infra
-from tiferet import TiferetError
-from tiferet.assets.exceptions import TiferetAPIError
-from tiferet.contexts import (
-    AppInterfaceContext,
-    FeatureContext,
-    ErrorContext,
-    LoggingContext,
-)
+from tiferet import TiferetError, TiferetAPIError
+from tiferet.contexts.app import AppSessionContext
+from tiferet.contexts.cache import CacheContext
 from tiferet.events import DomainEvent
 
 # ** app
@@ -22,81 +17,75 @@ from .request import OpenApiRequestContext
 
 # *** contexts
 
-# ** context: open_api_context
-class OpenApiContext(AppInterfaceContext):
+# ** context: open_api_session_context
+class OpenApiSessionContext(AppSessionContext):
     '''
-    A shared API context for managing OpenAPI interactions within the Tiferet framework.
+    The shared OpenAPI session hub Flask and FastAPI adapters subclass for
+    status-code-aware error handling and response building.
     '''
 
-    # * attribute: get_route_handler
-    get_route_handler: Callable
+    # * attribute: get_route_evt (private)
+    _get_route_evt: DomainEvent
 
-    # * attribute: get_status_code_handler
-    get_status_code_handler: Callable
+    # * attribute: get_status_code_evt (private)
+    _get_status_code_evt: DomainEvent
 
-    # * attribute: get_routers_handler
-    get_routers_handler: Callable
+    # * attribute: get_routers_evt (private)
+    _get_routers_evt: DomainEvent
 
     # * init
     def __init__(self,
-            interface_id: str,
-            features: FeatureContext,
-            errors: ErrorContext,
-            logging: LoggingContext,
-            get_route_evt: DomainEvent,
-            get_status_code_evt: DomainEvent,
-            get_routers_evt: DomainEvent,
+            get_dependency: Callable,
+            get_route_evt: DomainEvent = None,
+            get_status_code_evt: DomainEvent = None,
+            get_routers_evt: DomainEvent = None,
+            cache: CacheContext = None,
+            build_logger_handler: Callable = None,
+            execute_feature_handler: Callable = None,
+            create_request_handler: Callable = None,
+            raise_error_handler: Callable = None,
+            response_handler: Callable = None,
         ):
         '''
-        Initialize the OpenAPI context.
+        Initialize the OpenAPI session context.
 
-        :param interface_id: The interface ID.
-        :type interface_id: str
-        :param features: The feature context.
-        :type features: FeatureContext
-        :param errors: The error context.
-        :type errors: ErrorContext
-        :param logging: The logging context.
-        :type logging: LoggingContext
+        :param get_dependency: The DI resolution handler injected by the blueprint.
+        :type get_dependency: Callable
         :param get_route_evt: The domain event for retrieving a route.
         :type get_route_evt: DomainEvent
         :param get_status_code_evt: The domain event for retrieving a status code.
         :type get_status_code_evt: DomainEvent
         :param get_routers_evt: The domain event for retrieving all routers.
         :type get_routers_evt: DomainEvent
+        :param cache: The shared bootstrap cache.
+        :type cache: CacheContext
+        :param build_logger_handler: The logger-construction handler.
+        :type build_logger_handler: Callable
+        :param execute_feature_handler: The feature-execution handler.
+        :type execute_feature_handler: Callable
+        :param create_request_handler: The request-construction handler.
+        :type create_request_handler: Callable
+        :param raise_error_handler: The error-handling handler.
+        :type raise_error_handler: Callable
+        :param response_handler: The response-building handler.
+        :type response_handler: Callable
         '''
 
-        # Call the parent constructor.
-        super().__init__(interface_id, features, errors, logging)
-
-        # Set the domain event handlers.
-        self.get_route_handler = get_route_evt.execute
-        self.get_status_code_handler = get_status_code_evt.execute
-        self.get_routers_handler = get_routers_evt.execute
-
-    # * method: parse_request
-    def parse_request(self, headers: dict = {}, data: dict = {}, feature_id: str = None, **kwargs) -> OpenApiRequestContext:
-        '''
-        Parse the incoming request and return an OpenApiRequestContext instance.
-
-        :param headers: The request headers.
-        :type headers: dict
-        :param data: The request data.
-        :type data: dict
-        :param feature_id: The feature ID.
-        :type feature_id: str
-        :param kwargs: Additional keyword arguments.
-        :type kwargs: dict
-        :return: An OpenApiRequestContext instance.
-        :rtype: OpenApiRequestContext
-        '''
-
-        # Return an OpenApiRequestContext instance.
-        return OpenApiRequestContext(
-            headers=headers,
-            data=data,
-            feature_id=feature_id,
+        # Initialize the base application session hub.
+        super().__init__(
+            get_dependency=get_dependency,
+            cache=cache,
+            build_logger_handler=build_logger_handler,
+            execute_feature_handler=execute_feature_handler,
+            create_request_handler=create_request_handler,
+            raise_error_handler=raise_error_handler,
+            response_handler=response_handler,
         )
+
+        # Store the OpenAPI event collaborators.
+        self._get_route_evt = get_route_evt
+        self._get_status_code_evt = get_status_code_evt
+        self._get_routers_evt = get_routers_evt
 
     # * method: handle_error
     def handle_error(self, error: Exception, **kwargs) -> Any:
@@ -113,7 +102,7 @@ class OpenApiContext(AppInterfaceContext):
 
         # Get the status code via event if it's a TiferetError.
         if isinstance(error, TiferetError):
-            status_code = self.get_status_code_handler(error_code=error.error_code)
+            status_code = self._get_status_code_evt.execute(error_code=error.error_code)
         else:
             status_code = 500
 
@@ -124,24 +113,22 @@ class OpenApiContext(AppInterfaceContext):
             api_error.status_code = status_code
             raise
 
-    # * method: handle_response
-    def handle_response(self, request: OpenApiRequestContext, **kwargs) -> Any:
+    # * method: build_response
+    def build_response(self, request: OpenApiRequestContext) -> Any:
         '''
-        Handle the response from the request context.
+        Build the response from the request context.
 
         :param request: The request context.
         :type request: OpenApiRequestContext
-        :param kwargs: Additional keyword arguments.
-        :type kwargs: dict
         :return: The response and status code.
         :rtype: Any
         '''
 
         # Handle the response from the request context.
-        response = super().handle_response(request, **kwargs)
+        response = super().build_response(request)
 
         # Retrieve the route by the request feature id.
-        route = self.get_route_handler(endpoint=request.feature_id)
+        route = self._get_route_evt.execute(endpoint=request.feature_id)
 
         # Return the result with the specified status code.
         return response, route.status_code if route else 200
@@ -162,7 +149,7 @@ class OpenApiContext(AppInterfaceContext):
         '''
 
         # Retrieve all routers via the domain event handler.
-        routers = self.get_routers_handler()
+        routers = self._get_routers_evt.execute()
 
         # Build the paths dict from routers and their routes.
         paths = {}

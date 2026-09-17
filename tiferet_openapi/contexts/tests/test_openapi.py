@@ -29,7 +29,6 @@ class SpecRequestModel(BaseModel):
     # * attribute: amount
     amount: int
 
-
 # ** model: spec_response_model
 class SpecResponseModel(BaseModel):
     '''
@@ -421,7 +420,6 @@ def test_generate_spec_includes_documentation_fields_and_schemas(
         },
     }
 
-
 # ** test: generate_spec_preserves_bare_operation_without_documentation_fields
 def test_generate_spec_preserves_bare_operation_without_documentation_fields(
         context: OpenApiSessionContext,
@@ -465,7 +463,6 @@ def test_generate_spec_preserves_bare_operation_without_documentation_fields(
             },
         },
     }
-
 
 # ** test: generate_spec_omits_unresolvable_model_schemas
 def test_generate_spec_omits_unresolvable_model_schemas(

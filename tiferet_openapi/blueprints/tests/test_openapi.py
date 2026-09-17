@@ -12,7 +12,11 @@ from tiferet.contexts.cache import CacheContext
 from tiferet.domain import AppSession
 
 # ** app
-from ..openapi import build_openapi_session_context, create_openapi_request_context
+from ..openapi import (
+    build_openapi_session_context,
+    create_openapi_request_context,
+    get_route_handler,
+)
 from ...contexts.openapi import OpenApiSessionContext
 from ...contexts.request import OpenApiRequestContext
 
@@ -58,17 +62,8 @@ def test_build_openapi_session_context_constructs_context(
     :type cache: CacheContext
     '''
 
-    # Build the session context with mock OpenAPI event collaborators.
-    get_route_evt = mock.Mock()
-    get_status_code_evt = mock.Mock()
-    get_routers_evt = mock.Mock()
-    context = build_openapi_session_context(
-        app_session,
-        cache,
-        get_route_evt=get_route_evt,
-        get_status_code_evt=get_status_code_evt,
-        get_routers_evt=get_routers_evt,
-    )
+    # Build the session context from cache and session only.
+    context = build_openapi_session_context(app_session, cache)
 
     # Assert the constructed context, bound session, and default handlers.
     assert isinstance(context, OpenApiSessionContext)
@@ -78,9 +73,6 @@ def test_build_openapi_session_context_constructs_context(
     assert callable(context._get_route)
     assert callable(context._get_status_code)
     assert callable(context._get_routers)
-    assert context._get_route is not get_route_evt
-    context._get_route(endpoint='calc.add')
-    get_route_evt.execute.assert_called_once_with(endpoint='calc.add')
 
 # ** test: build_openapi_session_context_accepts_custom_request_handler
 def test_build_openapi_session_context_accepts_custom_request_handler(
@@ -100,14 +92,30 @@ def test_build_openapi_session_context_accepts_custom_request_handler(
     context = build_openapi_session_context(
         app_session,
         cache,
-        get_route_evt=mock.Mock(),
-        get_status_code_evt=mock.Mock(),
-        get_routers_evt=mock.Mock(),
         create_request_handler=create_openapi_request_context,
     )
 
     # Assert the custom request handler is wired.
     assert context._create_request is create_openapi_request_context
+
+# ** test: get_route_handler_resolves_event_via_get_dependency
+def test_get_route_handler_resolves_event_via_get_dependency() -> None:
+    '''
+    Test that get_route_handler resolves the event through get_dependency.
+    '''
+
+    # Stub the DI resolver to return a mock get-route event.
+    get_route_evt = mock.Mock()
+    get_route_evt.execute = mock.Mock(return_value='route')
+    get_dependency = mock.Mock(return_value=get_route_evt)
+
+    # Invoke the handler closure.
+    result = get_route_handler(get_dependency)(endpoint='calc.add')
+
+    # Assert DI resolution and event execution.
+    get_dependency.assert_called_once_with('get_route_evt', 'app')
+    get_route_evt.execute.assert_called_once_with(endpoint='calc.add')
+    assert result == 'route'
 
 # ** test: create_openapi_request_context_returns_openapi_request_context
 def test_create_openapi_request_context_returns_openapi_request_context() -> None:

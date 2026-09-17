@@ -9,7 +9,6 @@ from typing import Any, Callable, Dict
 from tiferet.blueprints import core
 from tiferet.contexts.app import AppSession
 from tiferet.contexts.cache import CacheContext
-from tiferet.events import DomainEvent
 
 # ** app
 from ..contexts.openapi import OpenApiSessionContext
@@ -51,60 +50,63 @@ def create_openapi_request_context(interface_id: str,
 # *** blueprints
 
 # ** blueprint: get_route_handler
-def get_route_handler(get_route_evt: DomainEvent) -> Callable:
+def get_route_handler(get_dependency: Callable) -> Callable:
     '''
-    Build a route-lookup closure from the resolved get-route event.
+    Build a route-lookup closure that resolves the get-route event via DI.
 
-    :param get_route_evt: The domain event for retrieving a route.
-    :type get_route_evt: DomainEvent
+    :param get_dependency: The DI resolution handler.
+    :type get_dependency: Callable
     :return: A callable that retrieves a route by endpoint.
     :rtype: Callable
     '''
 
-    # Build the handler closure with the event captured.
+    # Return the handler closure bound to the resolver.
     def handler(**kwargs) -> Any:
 
-        # Delegate to the captured event.
+        # Resolve and execute the get-route event.
+        get_route_evt = get_dependency('get_route_evt', 'app')
         return get_route_evt.execute(**kwargs)
 
     # Return the closure.
     return handler
 
 # ** blueprint: get_status_code_handler
-def get_status_code_handler(get_status_code_evt: DomainEvent) -> Callable:
+def get_status_code_handler(get_dependency: Callable) -> Callable:
     '''
-    Build a status-code-lookup closure from the resolved get-status-code event.
+    Build a status-code-lookup closure that resolves the get-status-code event via DI.
 
-    :param get_status_code_evt: The domain event for retrieving a status code.
-    :type get_status_code_evt: DomainEvent
+    :param get_dependency: The DI resolution handler.
+    :type get_dependency: Callable
     :return: A callable that retrieves an HTTP status code by error code.
     :rtype: Callable
     '''
 
-    # Build the handler closure with the event captured.
+    # Return the handler closure bound to the resolver.
     def handler(**kwargs) -> Any:
 
-        # Delegate to the captured event.
+        # Resolve and execute the get-status-code event.
+        get_status_code_evt = get_dependency('get_status_code_evt', 'app')
         return get_status_code_evt.execute(**kwargs)
 
     # Return the closure.
     return handler
 
 # ** blueprint: get_routers_handler
-def get_routers_handler(get_routers_evt: DomainEvent) -> Callable:
+def get_routers_handler(get_dependency: Callable) -> Callable:
     '''
-    Build a routers-lookup closure from the resolved get-routers event.
+    Build a routers-lookup closure that resolves the get-routers event via DI.
 
-    :param get_routers_evt: The domain event for retrieving all routers.
-    :type get_routers_evt: DomainEvent
+    :param get_dependency: The DI resolution handler.
+    :type get_dependency: Callable
     :return: A callable that retrieves the configured routers.
     :rtype: Callable
     '''
 
-    # Build the handler closure with the event captured.
+    # Return the handler closure bound to the resolver.
     def handler(**kwargs) -> Any:
 
-        # Delegate to the captured event.
+        # Resolve and execute the get-routers event.
+        get_routers_evt = get_dependency('get_routers_evt', 'app')
         return get_routers_evt.execute(**kwargs)
 
     # Return the closure.
@@ -113,9 +115,6 @@ def get_routers_handler(get_routers_evt: DomainEvent) -> Callable:
 # ** blueprint: build_openapi_session_context
 def build_openapi_session_context(app_session: AppSession,
         cache: CacheContext,
-        get_route_evt: DomainEvent,
-        get_status_code_evt: DomainEvent,
-        get_routers_evt: DomainEvent,
         create_request_handler: Callable = None,
         **extra_kwargs) -> OpenApiSessionContext:
     '''
@@ -124,19 +123,14 @@ def build_openapi_session_context(app_session: AppSession,
     This is a composition helper, not a full ``build_app``-shaped blueprint:
     ``tiferet-openapi`` is a library that ``tiferet-flask`` / ``tiferet-fast``
     extend further with their own request/response glue. The caller supplies
-    the cache and app session; this helper wraps the OpenAPI events as
-    handler callables and wires the app service container and resolver.
+    the cache and app session; this helper wires the app service container,
+    feature-level resolver, and OpenAPI handler closures that resolve their
+    events through ``resolver.get_dependency``.
 
     :param app_session: The resolved app session definition.
     :type app_session: AppSession
     :param cache: The pre-built shared cache context.
     :type cache: CacheContext
-    :param get_route_evt: The domain event for retrieving a route.
-    :type get_route_evt: DomainEvent
-    :param get_status_code_evt: The domain event for retrieving a status code.
-    :type get_status_code_evt: DomainEvent
-    :param get_routers_evt: The domain event for retrieving all routers.
-    :type get_routers_evt: DomainEvent
     :param create_request_handler: Optional request-construction handler;
         defaults to ``core.create_request_context`` when omitted.
     :type create_request_handler: Callable
@@ -160,8 +154,8 @@ def build_openapi_session_context(app_session: AppSession,
         resolver,
         create_request_handler=create_request_handler or core.create_request_context,
         response_handler=core.response_handler,
-        get_route_handler=get_route_handler(get_route_evt),
-        get_status_code_handler=get_status_code_handler(get_status_code_evt),
-        get_routers_handler=get_routers_handler(get_routers_evt),
+        get_route_handler=get_route_handler(resolver.get_dependency),
+        get_status_code_handler=get_status_code_handler(resolver.get_dependency),
+        get_routers_handler=get_routers_handler(resolver.get_dependency),
         **extra_kwargs,
     )

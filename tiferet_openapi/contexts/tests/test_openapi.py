@@ -11,13 +11,11 @@ import pytest
 from tiferet import TiferetError, TiferetAPIError
 from tiferet.contexts.app import AppSessionContext
 from tiferet.domain import AppSession
-from tiferet.events import DomainEvent
 
 # ** app
 from ...domain import ApiRoute, ApiRouter
 from ..openapi import OpenApiSessionContext
 from ..request import OpenApiRequestContext
-
 
 # *** fixtures
 
@@ -33,7 +31,6 @@ def app_session() -> AppSession:
 
     return AppSession(id='test_api', name='Test API')
 
-
 # ** fixture: get_dependency
 @pytest.fixture
 def get_dependency() -> Callable:
@@ -46,7 +43,6 @@ def get_dependency() -> Callable:
 
     return mock.Mock()
 
-
 # ** fixture: response_handler
 @pytest.fixture
 def response_handler() -> Callable:
@@ -58,7 +54,6 @@ def response_handler() -> Callable:
     '''
 
     return mock.Mock(return_value={'sum': 3})
-
 
 # ** fixture: raise_error_handler
 @pytest.fixture
@@ -80,57 +75,50 @@ def raise_error_handler() -> Callable:
 
     return mock.Mock(side_effect=handler)
 
-
-# ** fixture: mock_get_route_evt
+# ** fixture: get_route_handler
 @pytest.fixture
-def mock_get_route_evt() -> DomainEvent:
+def get_route_handler() -> Callable:
     '''
-    Mock domain event for get_route.
+    Mock route-lookup handler.
 
-    :return: A mock DomainEvent with an execute method.
-    :rtype: DomainEvent
+    :return: A mock callable.
+    :rtype: Callable
     '''
-    evt = mock.Mock(spec=DomainEvent)
-    evt.execute = mock.Mock()
-    return evt
 
+    return mock.Mock()
 
-# ** fixture: mock_get_status_code_evt
+# ** fixture: get_status_code_handler
 @pytest.fixture
-def mock_get_status_code_evt() -> DomainEvent:
+def get_status_code_handler() -> Callable:
     '''
-    Mock domain event for get_status_code.
+    Mock status-code-lookup handler.
 
-    :return: A mock DomainEvent with an execute method.
-    :rtype: DomainEvent
+    :return: A mock callable.
+    :rtype: Callable
     '''
-    evt = mock.Mock(spec=DomainEvent)
-    evt.execute = mock.Mock()
-    return evt
 
+    return mock.Mock()
 
-# ** fixture: mock_get_routers_evt
+# ** fixture: get_routers_handler
 @pytest.fixture
-def mock_get_routers_evt() -> DomainEvent:
+def get_routers_handler() -> Callable:
     '''
-    Mock domain event for get_routers.
+    Mock routers-lookup handler.
 
-    :return: A mock DomainEvent with an execute method.
-    :rtype: DomainEvent
+    :return: A mock callable.
+    :rtype: Callable
     '''
-    evt = mock.Mock(spec=DomainEvent)
-    evt.execute = mock.Mock()
-    return evt
 
+    return mock.Mock()
 
 # ** fixture: context
 @pytest.fixture
 def context(
         app_session: AppSession,
         get_dependency: Callable,
-        mock_get_route_evt: DomainEvent,
-        mock_get_status_code_evt: DomainEvent,
-        mock_get_routers_evt: DomainEvent,
+        get_route_handler: Callable,
+        get_status_code_handler: Callable,
+        get_routers_handler: Callable,
         raise_error_handler: Callable,
         response_handler: Callable,
     ) -> OpenApiSessionContext:
@@ -141,12 +129,12 @@ def context(
     :type app_session: AppSession
     :param get_dependency: The mock DI resolution handler.
     :type get_dependency: Callable
-    :param mock_get_route_evt: The mock get_route domain event.
-    :type mock_get_route_evt: DomainEvent
-    :param mock_get_status_code_evt: The mock get_status_code domain event.
-    :type mock_get_status_code_evt: DomainEvent
-    :param mock_get_routers_evt: The mock get_routers domain event.
-    :type mock_get_routers_evt: DomainEvent
+    :param get_route_handler: The mock route-lookup handler.
+    :type get_route_handler: Callable
+    :param get_status_code_handler: The mock status-code-lookup handler.
+    :type get_status_code_handler: Callable
+    :param get_routers_handler: The mock routers-lookup handler.
+    :type get_routers_handler: Callable
     :param raise_error_handler: The mock error-handling handler.
     :type raise_error_handler: Callable
     :param response_handler: The mock response-building handler.
@@ -158,13 +146,12 @@ def context(
     return OpenApiSessionContext.from_domain(
         app_session,
         get_dependency=get_dependency,
-        get_route_evt=mock_get_route_evt,
-        get_status_code_evt=mock_get_status_code_evt,
-        get_routers_evt=mock_get_routers_evt,
+        get_route_handler=get_route_handler,
+        get_status_code_handler=get_status_code_handler,
+        get_routers_handler=get_routers_handler,
         raise_error_handler=raise_error_handler,
         response_handler=response_handler,
     )
-
 
 # *** tests
 
@@ -176,48 +163,46 @@ def test_open_api_session_context_extends_app_session_context() -> None:
 
     assert issubclass(OpenApiSessionContext, AppSessionContext)
 
-
-# ** test: open_api_session_context_stores_event_collaborators
-def test_open_api_session_context_stores_event_collaborators(
+# ** test: open_api_session_context_stores_handlers
+def test_open_api_session_context_stores_handlers(
         context: OpenApiSessionContext,
-        mock_get_route_evt: DomainEvent,
-        mock_get_status_code_evt: DomainEvent,
-        mock_get_routers_evt: DomainEvent,
+        get_route_handler: Callable,
+        get_status_code_handler: Callable,
+        get_routers_handler: Callable,
     ) -> None:
     '''
-    Test that OpenApiSessionContext stores the OpenAPI event collaborators.
+    Test that OpenApiSessionContext stores the OpenAPI handler callables.
 
     :param context: The OpenApiSessionContext instance.
     :type context: OpenApiSessionContext
-    :param mock_get_route_evt: The mock get_route domain event.
-    :type mock_get_route_evt: DomainEvent
-    :param mock_get_status_code_evt: The mock get_status_code domain event.
-    :type mock_get_status_code_evt: DomainEvent
-    :param mock_get_routers_evt: The mock get_routers domain event.
-    :type mock_get_routers_evt: DomainEvent
+    :param get_route_handler: The mock route-lookup handler.
+    :type get_route_handler: Callable
+    :param get_status_code_handler: The mock status-code-lookup handler.
+    :type get_status_code_handler: Callable
+    :param get_routers_handler: The mock routers-lookup handler.
+    :type get_routers_handler: Callable
     '''
 
-    assert context._get_route_evt is mock_get_route_evt
-    assert context._get_status_code_evt is mock_get_status_code_evt
-    assert context._get_routers_evt is mock_get_routers_evt
-
+    assert context._get_route is get_route_handler
+    assert context._get_status_code is get_status_code_handler
+    assert context._get_routers is get_routers_handler
 
 # ** test: handle_error_tiferet_error_status_code
 def test_handle_error_tiferet_error_status_code(
         context: OpenApiSessionContext,
-        mock_get_status_code_evt: DomainEvent,
+        get_status_code_handler: Callable,
     ) -> None:
     '''
     Test that handle_error resolves status code via get_status_code_handler for TiferetError.
 
     :param context: The OpenApiSessionContext instance.
     :type context: OpenApiSessionContext
-    :param mock_get_status_code_evt: The mock get_status_code domain event.
-    :type mock_get_status_code_evt: DomainEvent
+    :param get_status_code_handler: The mock status-code-lookup handler.
+    :type get_status_code_handler: Callable
     '''
 
     # Configure the mock to return 400 status code.
-    mock_get_status_code_evt.execute.return_value = 400
+    get_status_code_handler.return_value = 400
 
     # Create a TiferetError.
     error = TiferetError('INVALID_INPUT', 'bad input')
@@ -227,8 +212,7 @@ def test_handle_error_tiferet_error_status_code(
         context.handle_error(error)
 
     assert exc_info.value.status_code == 400
-    mock_get_status_code_evt.execute.assert_called_once_with(error_code='INVALID_INPUT')
-
+    get_status_code_handler.assert_called_once_with(error_code='INVALID_INPUT')
 
 # ** test: handle_error_non_tiferet_error_500
 def test_handle_error_non_tiferet_error_500(
@@ -250,11 +234,10 @@ def test_handle_error_non_tiferet_error_500(
 
     assert exc_info.value.status_code == 500
 
-
 # ** test: build_response_returns_tuple
 def test_build_response_returns_tuple(
         context: OpenApiSessionContext,
-        mock_get_route_evt: DomainEvent,
+        get_route_handler: Callable,
         response_handler: Callable,
     ) -> None:
     '''
@@ -262,8 +245,8 @@ def test_build_response_returns_tuple(
 
     :param context: The OpenApiSessionContext instance.
     :type context: OpenApiSessionContext
-    :param mock_get_route_evt: The mock get_route domain event.
-    :type mock_get_route_evt: DomainEvent
+    :param get_route_handler: The mock route-lookup handler.
+    :type get_route_handler: Callable
     :param response_handler: The mock response-building handler.
     :type response_handler: Callable
     '''
@@ -271,7 +254,7 @@ def test_build_response_returns_tuple(
     # Create a mock route with status_code.
     mock_route = mock.Mock()
     mock_route.status_code = 201
-    mock_get_route_evt.execute.return_value = mock_route
+    get_route_handler.return_value = mock_route
 
     # Create a request.
     request = OpenApiRequestContext(feature_id='calc.add')
@@ -283,25 +266,24 @@ def test_build_response_returns_tuple(
     assert response == response_handler.return_value
     assert status_code == 201
     response_handler.assert_called_once_with(request)
-    mock_get_route_evt.execute.assert_called_once_with(endpoint='calc.add')
-
+    get_route_handler.assert_called_once_with(endpoint='calc.add')
 
 # ** test: build_response_unknown_route_defaults_200
 def test_build_response_unknown_route_defaults_200(
         context: OpenApiSessionContext,
-        mock_get_route_evt: DomainEvent,
+        get_route_handler: Callable,
     ) -> None:
     '''
     Test that build_response defaults to status code 200 when the route is unknown.
 
     :param context: The OpenApiSessionContext instance.
     :type context: OpenApiSessionContext
-    :param mock_get_route_evt: The mock get_route domain event.
-    :type mock_get_route_evt: DomainEvent
+    :param get_route_handler: The mock route-lookup handler.
+    :type get_route_handler: Callable
     '''
 
     # Configure the mock to return no route.
-    mock_get_route_evt.execute.return_value = None
+    get_route_handler.return_value = None
 
     # Create a request for an unknown feature.
     request = OpenApiRequestContext(feature_id='unknown.feature')
@@ -312,23 +294,22 @@ def test_build_response_unknown_route_defaults_200(
     # Assert the unknown route defaults to 200.
     assert status_code == 200
 
-
 # ** test: generate_spec_single_router
 def test_generate_spec_single_router(
         context: OpenApiSessionContext,
-        mock_get_routers_evt: DomainEvent,
+        get_routers_handler: Callable,
     ) -> None:
     '''
     Test that generate_spec produces a valid OpenAPI 3.0 spec for a single router.
 
     :param context: The OpenApiSessionContext instance.
     :type context: OpenApiSessionContext
-    :param mock_get_routers_evt: The mock get_routers domain event.
-    :type mock_get_routers_evt: DomainEvent
+    :param get_routers_handler: The mock routers-lookup handler.
+    :type get_routers_handler: Callable
     '''
 
     # Configure mock routers.
-    mock_get_routers_evt.execute.return_value = [
+    get_routers_handler.return_value = [
         ApiRouter(
             name='calc',
             prefix='/calc',
@@ -353,23 +334,22 @@ def test_generate_spec_single_router(
     assert spec['paths']['/calc/subtract']['post']['operationId'] == 'calc.subtract'
     assert '200' in spec['paths']['/calc/add']['post']['responses']
 
-
 # ** test: generate_spec_multi_router
 def test_generate_spec_multi_router(
         context: OpenApiSessionContext,
-        mock_get_routers_evt: DomainEvent,
+        get_routers_handler: Callable,
     ) -> None:
     '''
     Test that generate_spec handles multiple routers.
 
     :param context: The OpenApiSessionContext instance.
     :type context: OpenApiSessionContext
-    :param mock_get_routers_evt: The mock get_routers domain event.
-    :type mock_get_routers_evt: DomainEvent
+    :param get_routers_handler: The mock routers-lookup handler.
+    :type get_routers_handler: Callable
     '''
 
     # Configure mock routers.
-    mock_get_routers_evt.execute.return_value = [
+    get_routers_handler.return_value = [
         ApiRouter(
             name='calc',
             prefix='/calc',
@@ -394,23 +374,22 @@ def test_generate_spec_multi_router(
     assert '/ping' in spec['paths']
     assert spec['paths']['/ping']['get']['operationId'] == 'health.ping'
 
-
 # ** test: generate_spec_defaults
 def test_generate_spec_defaults(
         context: OpenApiSessionContext,
-        mock_get_routers_evt: DomainEvent,
+        get_routers_handler: Callable,
     ) -> None:
     '''
     Test that generate_spec uses default parameter values.
 
     :param context: The OpenApiSessionContext instance.
     :type context: OpenApiSessionContext
-    :param mock_get_routers_evt: The mock get_routers domain event.
-    :type mock_get_routers_evt: DomainEvent
+    :param get_routers_handler: The mock routers-lookup handler.
+    :type get_routers_handler: Callable
     '''
 
     # Configure mock with empty routers.
-    mock_get_routers_evt.execute.return_value = []
+    get_routers_handler.return_value = []
 
     # Generate the spec with defaults.
     spec = context.generate_spec()
@@ -421,23 +400,22 @@ def test_generate_spec_defaults(
     assert spec['info']['description'] == ''
     assert spec['paths'] == {}
 
-
 # ** test: generate_spec_multiple_methods
 def test_generate_spec_multiple_methods(
         context: OpenApiSessionContext,
-        mock_get_routers_evt: DomainEvent,
+        get_routers_handler: Callable,
     ) -> None:
     '''
     Test that generate_spec maps each HTTP method to a separate operation entry.
 
     :param context: The OpenApiSessionContext instance.
     :type context: OpenApiSessionContext
-    :param mock_get_routers_evt: The mock get_routers domain event.
-    :type mock_get_routers_evt: DomainEvent
+    :param get_routers_handler: The mock routers-lookup handler.
+    :type get_routers_handler: Callable
     '''
 
     # Configure mock with a route that has multiple methods.
-    mock_get_routers_evt.execute.return_value = [
+    get_routers_handler.return_value = [
         ApiRouter(
             name='items',
             prefix='/api',
@@ -455,7 +433,6 @@ def test_generate_spec_multiple_methods(
     assert 'post' in spec['paths']['/api/item']
     assert spec['paths']['/api/item']['get']['operationId'] == 'items.item'
     assert spec['paths']['/api/item']['post']['operationId'] == 'items.item'
-
 
 # ** test: create_docs_handler_returns_none
 def test_create_docs_handler_returns_none(context: OpenApiSessionContext) -> None:

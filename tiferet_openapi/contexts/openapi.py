@@ -9,11 +9,9 @@ from typing import Any, Callable
 from tiferet import TiferetError, TiferetAPIError
 from tiferet.contexts.app import AppSessionContext
 from tiferet.contexts.cache import CacheContext
-from tiferet.events import DomainEvent
 
 # ** app
 from .request import OpenApiRequestContext
-
 
 # *** contexts
 
@@ -24,39 +22,38 @@ class OpenApiSessionContext(AppSessionContext):
     status-code-aware error handling and response building.
     '''
 
-    # * attribute: get_route_evt (private)
-    _get_route_evt: DomainEvent
+    # * attribute: get_route (private)
+    _get_route: Callable
 
-    # * attribute: get_status_code_evt (private)
-    _get_status_code_evt: DomainEvent
+    # * attribute: get_status_code (private)
+    _get_status_code: Callable
 
-    # * attribute: get_routers_evt (private)
-    _get_routers_evt: DomainEvent
+    # * attribute: get_routers (private)
+    _get_routers: Callable
 
     # * init
     def __init__(self,
             get_dependency: Callable,
-            get_route_evt: DomainEvent = None,
-            get_status_code_evt: DomainEvent = None,
-            get_routers_evt: DomainEvent = None,
+            get_route_handler: Callable = None,
+            get_status_code_handler: Callable = None,
+            get_routers_handler: Callable = None,
             cache: CacheContext = None,
             build_logger_handler: Callable = None,
             execute_feature_handler: Callable = None,
             create_request_handler: Callable = None,
             raise_error_handler: Callable = None,
-            response_handler: Callable = None,
-        ):
+            response_handler: Callable = None):
         '''
         Initialize the OpenAPI session context.
 
         :param get_dependency: The DI resolution handler injected by the blueprint.
         :type get_dependency: Callable
-        :param get_route_evt: The domain event for retrieving a route.
-        :type get_route_evt: DomainEvent
-        :param get_status_code_evt: The domain event for retrieving a status code.
-        :type get_status_code_evt: DomainEvent
-        :param get_routers_evt: The domain event for retrieving all routers.
-        :type get_routers_evt: DomainEvent
+        :param get_route_handler: The injected callable that retrieves a route.
+        :type get_route_handler: Callable
+        :param get_status_code_handler: The injected callable that retrieves a status code.
+        :type get_status_code_handler: Callable
+        :param get_routers_handler: The injected callable that retrieves all routers.
+        :type get_routers_handler: Callable
         :param cache: The shared bootstrap cache.
         :type cache: CacheContext
         :param build_logger_handler: The logger-construction handler.
@@ -82,10 +79,10 @@ class OpenApiSessionContext(AppSessionContext):
             response_handler=response_handler,
         )
 
-        # Store the OpenAPI event collaborators.
-        self._get_route_evt = get_route_evt
-        self._get_status_code_evt = get_status_code_evt
-        self._get_routers_evt = get_routers_evt
+        # Store the injected OpenAPI handler callables.
+        self._get_route = get_route_handler
+        self._get_status_code = get_status_code_handler
+        self._get_routers = get_routers_handler
 
     # * method: handle_error
     def handle_error(self, error: Exception, **kwargs) -> Any:
@@ -102,7 +99,7 @@ class OpenApiSessionContext(AppSessionContext):
 
         # Get the status code via event if it's a TiferetError.
         if isinstance(error, TiferetError):
-            status_code = self._get_status_code_evt.execute(error_code=error.error_code)
+            status_code = self._get_status_code(error_code=error.error_code)
         else:
             status_code = 500
 
@@ -128,7 +125,7 @@ class OpenApiSessionContext(AppSessionContext):
         response = super().build_response(request)
 
         # Retrieve the route by the request feature id.
-        route = self._get_route_evt.execute(endpoint=request.feature_id)
+        route = self._get_route(endpoint=request.feature_id)
 
         # Return the result with the specified status code.
         return response, route.status_code if route else 200
@@ -149,7 +146,7 @@ class OpenApiSessionContext(AppSessionContext):
         '''
 
         # Retrieve all routers via the domain event handler.
-        routers = self._get_routers_evt.execute()
+        routers = self._get_routers()
 
         # Build the paths dict from routers and their routes.
         paths = {}

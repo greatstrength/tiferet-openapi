@@ -16,7 +16,6 @@ from ..openapi import build_openapi_session_context, create_openapi_request_cont
 from ...contexts.openapi import OpenApiSessionContext
 from ...contexts.request import OpenApiRequestContext
 
-
 # *** fixtures
 
 # ** fixture: cache
@@ -31,7 +30,6 @@ def cache() -> CacheContext:
 
     return core.build_cache()
 
-
 # ** fixture: app_session
 @pytest.fixture
 def app_session() -> AppSession:
@@ -43,7 +41,6 @@ def app_session() -> AppSession:
     '''
 
     return AppSession(id='test_api', name='Test API')
-
 
 # *** tests
 
@@ -62,12 +59,15 @@ def test_build_openapi_session_context_constructs_context(
     '''
 
     # Build the session context with mock OpenAPI event collaborators.
+    get_route_evt = mock.Mock()
+    get_status_code_evt = mock.Mock()
+    get_routers_evt = mock.Mock()
     context = build_openapi_session_context(
         app_session,
         cache,
-        get_route_evt=mock.Mock(),
-        get_status_code_evt=mock.Mock(),
-        get_routers_evt=mock.Mock(),
+        get_route_evt=get_route_evt,
+        get_status_code_evt=get_status_code_evt,
+        get_routers_evt=get_routers_evt,
     )
 
     # Assert the constructed context, bound session, and default handlers.
@@ -75,7 +75,12 @@ def test_build_openapi_session_context_constructs_context(
     assert context.domain is app_session
     assert context._create_request is core.create_request_context
     assert context._build_response is core.response_handler
-
+    assert callable(context._get_route)
+    assert callable(context._get_status_code)
+    assert callable(context._get_routers)
+    assert context._get_route is not get_route_evt
+    context._get_route(endpoint='calc.add')
+    get_route_evt.execute.assert_called_once_with(endpoint='calc.add')
 
 # ** test: build_openapi_session_context_accepts_custom_request_handler
 def test_build_openapi_session_context_accepts_custom_request_handler(
@@ -103,7 +108,6 @@ def test_build_openapi_session_context_accepts_custom_request_handler(
 
     # Assert the custom request handler is wired.
     assert context._create_request is create_openapi_request_context
-
 
 # ** test: create_openapi_request_context_returns_openapi_request_context
 def test_create_openapi_request_context_returns_openapi_request_context() -> None:

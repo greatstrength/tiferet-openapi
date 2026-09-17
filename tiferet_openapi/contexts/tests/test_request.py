@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 # ** app
 from ..request import OpenApiRequestContext
 
-
 # *** models
 
 # ** model: sample_model
@@ -22,7 +21,6 @@ class SampleModel(BaseModel):
 
     # * attribute: value
     value: int = Field(..., description='The value.')
-
 
 # *** tests
 
@@ -39,7 +37,6 @@ def test_set_result_none() -> None:
     # Assert the result is an empty string.
     assert request.result == ''
 
-
 # ** test: set_result_base_model
 def test_set_result_base_model() -> None:
     '''
@@ -53,7 +50,6 @@ def test_set_result_base_model() -> None:
 
     # Assert the result is a dict.
     assert request.result == {'name': 'foo', 'value': 42}
-
 
 # ** test: set_result_list_of_base_models
 def test_set_result_list_of_base_models() -> None:
@@ -75,7 +71,6 @@ def test_set_result_list_of_base_models() -> None:
         {'name': 'b', 'value': 2},
     ]
 
-
 # ** test: set_result_dict_of_base_models
 def test_set_result_dict_of_base_models() -> None:
     '''
@@ -96,7 +91,6 @@ def test_set_result_dict_of_base_models() -> None:
         'y': {'name': 'y', 'value': 20},
     }
 
-
 # ** test: set_result_primitive
 def test_set_result_primitive() -> None:
     '''
@@ -110,7 +104,6 @@ def test_set_result_primitive() -> None:
     # Assert the result is the primitive value.
     assert request.result == 42
 
-
 # ** test: set_result_with_data_key
 def test_set_result_with_data_key() -> None:
     '''
@@ -123,7 +116,6 @@ def test_set_result_with_data_key() -> None:
 
     # Assert the value is stored in request.data.
     assert request.data['step_result'] == 'intermediate'
-
 
 # ** test: handle_response_serializes_result
 def test_handle_response_serializes_result() -> None:

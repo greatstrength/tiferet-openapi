@@ -24,3 +24,11 @@ class SpecResponseModel(BaseModel):
 
     # * attribute: result
     result: int
+
+# ** model: not_a_pydantic_model
+class NotAPydanticModel:
+    '''
+    Plain class used to exercise the non-Pydantic-class failure mode.
+    '''
+
+    pass

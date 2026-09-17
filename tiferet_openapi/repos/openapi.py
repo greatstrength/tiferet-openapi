@@ -6,7 +6,7 @@
 from typing import List
 
 # ** infra
-from tiferet import Yaml
+from tiferet.utils import Yaml
 
 # ** app
 from ..interfaces import OpenApiService

@@ -1,4 +1,4 @@
-**Status:** Draft · **Domain:** `tiferet-openapi` · **Code:** `tiferet_openapi/` · **Branch:** `main`
+**Status:** Current · **Domain:** `tiferet-openapi` · **Code:** `tiferet_openapi/` · **Branch:** `main` · **Version:** `1.0.0`
 
 # tiferet-openapi: Domain Vision Statement
 
@@ -10,13 +10,13 @@ tiferet-openapi's bet is that a route's shape — its path, the methods it answe
 
 ## What this domain makes real
 
-tiferet-openapi is the shared layer that lets a Tiferet-based API declare its routes, its inputs and outputs, and its error-to-status-code mapping once, in a plain configuration file, and get back everything a published API needs from that single declaration: a working router any framework adapter can run, request and response shapes a client can validate against, a generated industry-standard specification (OpenAPI) describing all of it, and a documentation page a client can open and read — without a person writing any of those by hand or keeping them in sync after the fact.
+tiferet-openapi is the shared layer that lets a Tiferet-based API declare its routes, its inputs and outputs, and its error-to-status-code mapping once, in a plain configuration file, and get back everything a published API needs from that single declaration: a working router any framework adapter can run, request and response shapes a client can validate against, and a generated industry-standard specification (OpenAPI) describing all of it — without a person writing any of those by hand or keeping them in sync after the fact.
 
 ## What we get for it
 
-**One source of truth, many framework adapters.** tiferet-flask and tiferet-fast already share this layer instead of each maintaining its own copy of route and error-handling logic. Every adapter added after them inherits the same declared routes, the same generated documentation, and the same error behavior for free — the cost of a third or fourth framework adapter drops to "wire it up," not "rebuild the documentation layer again."
+**One source of truth, many framework adapters.** tiferet-flask and tiferet-fast already share this layer instead of each maintaining its own copy of route and error-handling logic. Every adapter added after them inherits the same declared routes, the same generated specification, and the same error behavior for free — the cost of a third or fourth framework adapter drops to "wire it up," not "rebuild the documentation layer again."
 
-**Documentation that can't quietly go stale.** Because the published specification is generated from the same declaration that drives the running service, a route that changes in the declaration changes in the documentation automatically. There is no second file to remember to update, and no way for the two to disagree.
+**Documentation that can't quietly go stale.** Because the published specification is generated from the same declaration that drives the running service, a route that changes in the declaration changes in the documentation automatically. A broken model reference fails generation instead of omitting a schema. There is no second file to remember to update, and no way for the two to disagree.
 
 **Errors are documented, not just handled.** A client integrating against the API needs to know not just that a request can fail, but what failure looks like and what status code to expect. Mapping error conditions to HTTP status codes and documenting error response shapes are part of the same declaration as the routes themselves, so failure modes show up in the published documentation instead of being discovered by a client in production.
 
@@ -28,7 +28,7 @@ tiferet-openapi is the shared layer that lets a Tiferet-based API declare its ro
 
 Every API surfaced through tiferet-openapi goes through the same journey:
 
-> **Declare** routes, request/response shapes, and error mappings as configuration → **serve** requests against that declaration, validating shape and resolving the right status code → **generate** an OpenAPI specification straight from the same declaration → **publish** that specification as a documentation page a client can open.
+> **Declare** routes, request/response shapes, and error mappings as configuration → **serve** requests against that declaration, validating shape and resolving the right status code → **generate** an OpenAPI specification straight from the same declaration → **publish** that specification as data a documentation surface can render.
 
 The design commitment underneath all four steps: the specification is *derived*, never hand-maintained. Nothing about the published documentation is allowed to be a fact that exists only in the documentation — every line of it traces back to the same declaration the running service already obeys. That is what makes the fourth step, publishing, safe to treat as a detail instead of a second job.
 

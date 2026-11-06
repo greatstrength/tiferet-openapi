@@ -6,6 +6,7 @@
 from typing import Any, Callable, Dict
 
 # ** infra
+from tiferet.blueprints import app as app_blueprints
 from tiferet.blueprints import core
 from tiferet.contexts.app import AppSession
 from tiferet.contexts.cache import CacheContext
@@ -48,6 +49,24 @@ def create_openapi_request_context(interface_id: str,
     )
 
 # *** blueprints
+
+# ** blueprint: build_cache
+def build_cache(cache: Dict[str, Any] = None) -> CacheContext:
+    '''
+    Build the OpenAPI dialect cache from the standard application cache.
+
+    Wraps :func:`tiferet.blueprints.app.build_cache` so callers receive the
+    framework default services (including ``di_service``) without using the
+    bare core cache. Later RFPs may stack OpenAPI catalogs on this helper.
+
+    :param cache: An optional dict used to pre-seed the cache.
+    :type cache: Dict[str, Any]
+    :return: The initialized cache context seeded with standard app catalogs.
+    :rtype: CacheContext
+    '''
+
+    # Delegate to the standard application cache builder.
+    return app_blueprints.build_cache(cache)
 
 # ** blueprint: get_route_handler
 def get_route_handler(get_dependency: Callable) -> Callable:
@@ -146,11 +165,11 @@ def build_openapi_session_context(app_session: AppSession,
     resolver = core.build_service_resolver(app_container)
 
     # Delegate handler wiring, collaborator resolution, and construction.
+    # Match tiferet >= 2.1.2: compose_session_context no longer takes app_container.
     return core.compose_session_context(
         OpenApiSessionContext,
         app_session,
         cache,
-        app_container,
         resolver,
         create_request_handler=create_request_handler or core.create_request_context,
         response_handler=core.response_handler,

@@ -14,6 +14,7 @@ from tiferet.domain import AppSession
 
 # ** app
 from ..openapi import (
+    build_cache,
     build_openapi_session_context,
     create_openapi_request_context,
     get_route_handler,
@@ -29,11 +30,11 @@ def cache() -> CacheContext:
     '''
     Bootstrap cache pre-seeded with all framework defaults.
 
-    :return: A CacheContext seeded by core.build_cache.
+    :return: A CacheContext seeded by the OpenAPI dialect build_cache.
     :rtype: CacheContext
     '''
 
-    return core.build_cache()
+    return build_cache()
 
 # ** fixture: app_session
 @pytest.fixture
@@ -75,6 +76,10 @@ class TestBuildOpenApiSessionContext:
         :return: None
         :rtype: None
         '''
+
+        # Assert the dialect cache carries the default DI service.
+        services = cache.get_by_prefix('app', 'services')
+        assert 'di_service' in services
 
         # Build the session context from cache and session only.
         context = build_openapi_session_context(app_session, cache)
